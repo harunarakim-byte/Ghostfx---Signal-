@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>GhostFX Signal Bot</title>
+<!-- PWA -->
+<meta name="application-name" content="GhostFX Signals">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GhostFX">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#04080f">
+<meta name="description" content="AI-powered binary options signal generator for IQ Option">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%2304080f'/%3E%3Cpolyline points='400,160 260,300 180,220 112,288' fill='none' stroke='%2300c8ff' stroke-width='28' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpolyline points='320,160 400,160 400,240' fill='none' stroke='%2300c8ff' stroke-width='28' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const m = {name:"GhostFX Signal Bot",short_name:"GhostFX",description:"AI binary options signals for IQ Option",start_url:".",display:"standalone",background_color:"#04080f",theme_color:"#04080f",orientation:"portrait",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%2304080f'/%3E%3Cpolyline points='400,160 260,300 180,220 112,288' fill='none' stroke='%2300c8ff' stroke-width='28' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
+  const l = document.createElement('link');
+  l.rel = 'manifest';
+  l.href = URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/json'}));
+  document.head.appendChild(l);
+});
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #04080f;
+    --surface: #080f1a;
+    --card: #0a1525;
+    --border: #112040;
+    --accent: #00c8ff;
+    --accent2: #0077ff;
+    --green: #00e676;
+    --red: #ff1744;
+    --gold: #ffd740;
+    --text: #c5d8f0;
+    --muted: #3d6080;
+    --glow-blue: 0 0 24px rgba(0,200,255,0.25);
+    --glow-green: 0 0 20px rgba(0,230,118,0.3);
+    --glow-red: 0 0 20px rgba(255,23,68,0.3);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    font-family: 'Exo 2', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+  }
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(0,119,255,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(0,200,255,0.06) 0%, transparent 60%);
+    pointer-events:none; z-index:0;
+  }
+  /* Scanline overlay */
+  body::after {
+    content:'';
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px);
+    pointer-events:none; z-index:0;
+  }
+
+  .app { position:relative; z-index:1; max-width:820px; margin:0 auto; padding:24px 16px 80px; }
+
+  /* ── Header ── */
+  header { text-align:center; margin-bottom:32px; }
+  .logo-wrap { display:inline-flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .logo-icon { width:40px; height:40px; border:2px solid var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow: var(--glow-blue); }
+  .logo-icon svg { width:22px; height:22px; }
+  h1 { font-family:'Orbitron',monospace; font-size:22px; font-weight:900; color:#fff; letter-spacing:3px; }
+  h1 span { color:var(--accent); }
+  .subtitle { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:4px; text-transform:uppercase; margin-top:4px; }
+  .platform-badge {
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(0,200,255,0.08); border:1px solid rgba(0,200,255,0.2);
+    border-radius:20px; padding:4px 14px; margin-top:12px;
+    font-size:12px; font-weight:600; color:var(--accent); letter-spacing:1px;
+  }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 1.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Grid Layout ── */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  @media(max-width:560px){ .grid-2{ grid-template-columns:1fr; } }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
+  @media(max-width:560px){ .grid-3{ grid-template-columns:1fr 1fr; } }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius:12px;
+    padding:18px;
+    position:relative;
+    overflow:hidden;
+    transition: border-color .2s;
+  }
+  .card:hover { border-color: rgba(0,200,255,0.25); }
+  .card::before {
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.4), transparent);
+  }
+  .card-label {
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; color:var(--muted); letter-spacing:3px;
+    text-transform:uppercase; margin-bottom:10px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .card-label::before { content:'//'; color:var(--accent2); }
+
+  /* ── Form Elements ── */
+  select, input[type=text] {
+    width:100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius:8px;
+    color:#fff;
+    font-family:'Exo 2',sans-serif;
+    font-size:14px; font-weight:600;
+    padding:10px 14px;
+    appearance:none;
+    -webkit-appearance:none;
+    outline:none;
+    transition: border-color .2s, box-shadow .2s;
+    cursor:pointer;
+  }
+  select:focus, input[type=text]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,200,255,0.1);
+  }
+  .select-wrap { position:relative; }
+  .select-wrap::after {
+    content:'▾';
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    color:var(--muted); pointer-events:none; font-size:14px;
+  }
+
+  /* Expiry Pills */
+  .expiry-grid { display:flex; gap:8px; flex-wrap:wrap; }
+  .expiry-pill {
+    flex:1; min-width:60px;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 4px;
+    text-align:center;
+    font-size:13px; font-weight:700;
+    color:var(--muted);
+    cursor:pointer;
+    transition: all .15s;
+    user-select:none;
+  }
+  .expiry-pill:hover { border-color:var(--accent); color:var(--accent); }
+  .expiry-pill.active { background:rgba(0,200,255,0.12); border-color:var(--accent); color:var(--accent); box-shadow: var(--glow-blue); }
+
+  /* Session pills */
+  .session-grid { display:flex; gap:8px; flex-wrap:wrap; }
+  .session-pill {
+    flex:1;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 10px;
+    text-align:center;
+    font-size:12px; font-weight:600;
+    color:var(--muted); cursor:pointer;
+    transition:all .15s; user-select:none;
+  }
+  .session-pill:hover { border-color:var(--accent2); color:var(--accent); }
+  .session-pill.active { background:rgba(0,119,255,0.12); border-color:var(--accent2); color:#fff; }
+
+  /* Trend selector */
+  .trend-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .trend-btn {
+    border-radius:8px; border:1px solid var(--border);
+    padding:10px 4px; text-align:center;
+    font-size:12px; font-weight:700; cursor:pointer;
+    transition:all .15s; user-select:none;
+    background:rgba(255,255,255,0.03);
+    color:var(--muted);
+  }
+  .trend-btn:hover { border-color:#555; color:#fff; }
+  .trend-btn.bull.active { background:rgba(0,230,118,0.12); border-color:var(--green); color:var(--green); box-shadow:var(--glow-green); }
+  .trend-btn.bear.active { background:rgba(255,23,68,0.12); border-color:var(--red); color:var(--red); box-shadow:var(--glow-red); }
+  .trend-btn.side.active { background:rgba(255,215,64,0.10); border-color:var(--gold); color:var(--gold); }
+
+  /* Market context input */
+  textarea {
+    width:100%; background:rgba(255,255,255,0.04);
+    border:1px solid var(--border); border-radius:8px;
+    color:#fff; font-family:'Exo 2',sans-serif;
+    font-size:13px; line-height:1.6; padding:10px 14px;
+    resize:vertical; min-height:80px; outline:none;
+    transition: border-color .2s;
+  }
+  textarea::placeholder { color:var(--muted); }
+  textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,200,255,0.08); }
+
+  /* Generate Button */
+  .btn-generate {
+    width:100%; padding:16px;
+    background: linear-gradient(135deg, #0055cc, #00aaff);
+    border:none; border-radius:12px;
+    font-family:'Orbitron',monospace; font-size:14px; font-weight:700;
+    color:#fff; letter-spacing:2px; cursor:pointer;
+    position:relative; overflow:hidden;
+    transition: transform .1s, box-shadow .2s;
+    box-shadow: 0 4px 24px rgba(0,150,255,0.35);
+    margin-bottom:20px;
+  }
+  .btn-generate:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(0,150,255,0.5); }
+  .btn-generate:active { transform:translateY(0); }
+  .btn-generate:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .btn-generate .shimmer {
+    position:absolute; inset:0;
+    background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+    transform:translateX(-100%); animation:shimmer 2s infinite;
+  }
+  @keyframes shimmer { to{ transform:translateX(100%); } }
+
+  /* ── Signal Output ── */
+  #signal-output { display:none; }
+  .signal-card {
+    background: var(--card);
+    border:1px solid var(--border);
+    border-radius:16px;
+    overflow:hidden;
+    animation: fadeSlide .4s ease;
+  }
+  @keyframes fadeSlide { from{ opacity:0; transform:translateY(20px); } to{ opacity:1; transform:translateY(0); } }
+
+  .signal-header {
+    padding:14px 20px;
+    background:linear-gradient(135deg, rgba(0,85,200,0.3), rgba(0,170,255,0.15));
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .signal-header-title { font-family:'Orbitron',monospace; font-size:13px; color:var(--accent); letter-spacing:2px; }
+  .signal-time { font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); }
+
+  .signal-body { padding:20px; }
+
+  .direction-banner {
+    display:flex; align-items:center; justify-content:center; gap:16px;
+    border-radius:12px; padding:20px;
+    margin-bottom:20px;
+    font-family:'Orbitron',monospace; font-size:26px; font-weight:900; letter-spacing:4px;
+    transition: all .3s;
+  }
+  .direction-banner.call { background:rgba(0,230,118,0.1); border:2px solid var(--green); color:var(--green); box-shadow:var(--glow-green); }
+  .direction-banner.put { background:rgba(255,23,68,0.1); border:2px solid var(--red); color:var(--red); box-shadow:var(--glow-red); }
+  .direction-banner .arrow { font-size:36px; }
+
+  .signal-meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:20px; }
+  @media(max-width:480px){ .signal-meta{ grid-template-columns:1fr 1fr; } }
+  .meta-item { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .meta-key { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; font-family:'Share Tech Mono',monospace; margin-bottom:4px; }
+  .meta-val { font-size:16px; font-weight:700; color:#fff; }
+
+  /* Confidence bar */
+  .confidence-wrap { margin-bottom:20px; }
+  .conf-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .conf-label { font-size:11px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; font-family:'Share Tech Mono',monospace; }
+  .conf-pct { font-family:'Orbitron',monospace; font-size:18px; font-weight:700; color:var(--gold); }
+  .conf-bar-bg { height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+  .conf-bar-fill { height:100%; border-radius:4px; transition:width 1s cubic-bezier(.4,0,.2,1); background:linear-gradient(90deg, #0055cc, var(--gold)); }
+
+  /* Analysis text */
+  .analysis-box {
+    background:rgba(255,255,255,0.03); border:1px solid var(--border);
+    border-radius:10px; padding:14px 16px;
+    font-size:13px; line-height:1.7; color:var(--text);
+    margin-bottom:20px; white-space:pre-wrap;
+  }
+
+  /* Telegram preview */
+  .tg-preview {
+    background:#17212b;
+    border-radius:12px; padding:16px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:13px; line-height:1.8; color:#d1d8e0;
+    border:1px solid #2a3f55;
+    margin-bottom:16px;
+    position:relative;
+  }
+  .tg-badge { position:absolute; top:-10px; left:16px; background:#2ca5e0; color:#fff; font-size:10px; font-weight:700; padding:2px 10px; border-radius:10px; letter-spacing:1px; }
+
+  /* Copy & action buttons */
+  .action-row { display:flex; gap:10px; }
+  .btn-copy, .btn-new {
+    flex:1; padding:12px;
+    border-radius:10px; border:none;
+    font-family:'Exo 2',sans-serif; font-size:14px; font-weight:700;
+    cursor:pointer; transition:all .15s; letter-spacing:1px;
+  }
+  .btn-copy { background:rgba(0,200,255,0.12); border:1px solid var(--accent); color:var(--accent); }
+  .btn-copy:hover { background:rgba(0,200,255,0.2); }
+  .btn-new { background:rgba(255,255,255,0.06); border:1px solid var(--border); color:var(--text); }
+  .btn-new:hover { border-color:#888; color:#fff; }
+
+  /* Disclaimer */
+  .disclaimer {
+    margin-top:32px; padding:14px 16px;
+    background:rgba(255,215,64,0.06); border:1px solid rgba(255,215,64,0.2);
+    border-radius:10px; font-size:11px; color:rgba(255,215,64,0.7);
+    line-height:1.6; text-align:center;
+  }
+
+  /* Loading state */
+  .loading-dots span {
+    display:inline-block; width:8px; height:8px; margin:0 3px;
+    background:var(--accent); border-radius:50%;
+    animation:bounce .8s infinite;
+  }
+  .loading-dots span:nth-child(2){ animation-delay:.15s; }
+  .loading-dots span:nth-child(3){ animation-delay:.3s; }
+  @keyframes bounce { 0%,80%,100%{transform:scale(0.6); opacity:.5} 40%{transform:scale(1); opacity:1} }
+
+  /* Error */
+  .error-box { background:rgba(255,23,68,0.08); border:1px solid rgba(255,23,68,0.3); border-radius:10px; padding:14px; color:var(--red); font-size:13px; line-height:1.6; }
+
+  /* ── Bottom Nav ── */
+  .bottom-nav {
+    position:fixed; bottom:0; left:0; right:0;
+    background:rgba(8,15,26,0.97); backdrop-filter:blur(12px);
+    border-top:1px solid var(--border);
+    display:flex; z-index:100;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .nav-btn {
+    flex:1; padding:12px 4px 10px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    background:none; border:none; cursor:pointer;
+    font-family:'Exo 2',sans-serif; font-size:10px; font-weight:600;
+    color:var(--muted); letter-spacing:1px; text-transform:uppercase;
+    transition:color .2s;
+  }
+  .nav-btn.active { color:var(--accent); }
+  .nav-btn svg { width:20px; height:20px; }
+  .page { display:none; }
+  .page.active { display:block; }
+  .app { padding-bottom: 80px; }
+
+  /* ── Tracker Styles ── */
+  .stats-row { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; margin-bottom:16px; }
+  @media(max-width:480px){ .stats-row{ grid-template-columns:1fr 1fr; } }
+  .stat-box {
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:14px 12px; text-align:center;
+  }
+  .stat-box::before { display:none; }
+  .stat-num { font-family:'Orbitron',monospace; font-size:22px; font-weight:700; }
+  .stat-lbl { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-top:3px; font-family:'Share Tech Mono',monospace; }
+  .stat-box.wins .stat-num { color:var(--green); }
+  .stat-box.losses .stat-num { color:var(--red); }
+  .stat-box.winrate .stat-num { color:var(--gold); }
+  .stat-box.total .stat-num { color:var(--accent); }
+
+  .winrate-bar-wrap { margin-bottom:20px; }
+  .winrate-bar-bg { height:10px; background:rgba(255,255,255,0.05); border-radius:5px; overflow:hidden; display:flex; }
+  .winrate-bar-win { height:100%; background:var(--green); border-radius:5px 0 0 5px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+  .winrate-bar-loss { height:100%; background:var(--red); border-radius:0 5px 5px 0; transition:width .8s cubic-bezier(.4,0,.2,1); }
+
+  .log-entry {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; margin-bottom:10px;
+    display:flex; align-items:center; gap:12px;
+    animation:fadeSlide .3s ease;
+  }
+  .log-entry::before { display:none; }
+  .log-dir { width:50px; text-align:center; font-family:'Orbitron',monospace; font-size:11px; font-weight:700; padding:4px 6px; border-radius:6px; }
+  .log-dir.call { background:rgba(0,230,118,0.12); color:var(--green); border:1px solid rgba(0,230,118,0.3); }
+  .log-dir.put { background:rgba(255,23,68,0.12); color:var(--red); border:1px solid rgba(255,23,68,0.3); }
+  .log-info { flex:1; }
+  .log-asset { font-size:14px; font-weight:700; color:#fff; }
+  .log-meta { font-size:11px; color:var(--muted); margin-top:2px; font-family:'Share Tech Mono',monospace; }
+  .log-result { font-family:'Orbitron',monospace; font-size:12px; font-weight:700; padding:4px 10px; border-radius:6px; cursor:pointer; border:none; }
+  .log-result.win { background:rgba(0,230,118,0.12); color:var(--green); border:1px solid rgba(0,230,118,0.3); }
+  .log-result.loss { background:rgba(255,23,68,0.12); color:var(--red); border:1px solid rgba(255,23,68,0.3); }
+  .log-result.pending { background:rgba(255,215,64,0.1); color:var(--gold); border:1px solid rgba(255,215,64,0.3); }
+  .log-delete { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:0 4px; }
+  .log-delete:hover { color:var(--red); }
+  .empty-state { text-align:center; padding:50px 20px; color:var(--muted); font-size:13px; letter-spacing:1px; }
+  .empty-state div { font-size:40px; margin-bottom:12px; }
+
+  .log-controls { display:flex; gap:8px; margin-bottom:16px; }
+  .filter-btn { flex:1; padding:8px; border-radius:8px; border:1px solid var(--border); background:rgba(255,255,255,0.03); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+  .filter-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,200,255,0.08); }
+  .btn-clear-log { padding:8px 14px; border-radius:8px; border:1px solid rgba(255,23,68,0.3); background:rgba(255,23,68,0.06); color:var(--red); font-size:12px; font-weight:600; cursor:pointer; }
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="page active" id="page-signals">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-wrap">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#00c8ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+        </svg>
+      </div>
+      <h1>GHOST<span>FX</span> SIGNALS</h1>
+    </div>
+    <div class="subtitle">AI-Powered Binary Options Signal Generator</div>
+    <div class="platform-badge"><div class="dot"></div> IQ OPTION · LIVE SIGNALS</div>
+  </header>
+
+  <!-- ── ASSET ── -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-label">Asset Pair</div>
+      <div class="select-wrap">
+        <select id="asset">
+          <optgroup label="── Forex ──">
+            <option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option>
+            <option>AUD/USD</option><option>USD/CAD</option><option>EUR/GBP</option>
+            <option>EUR/JPY</option><option>GBP/JPY</option><option>USD/CHF</option>
+            <option>NZD/USD</option>
+          </optgroup>
+          <optgroup label="── Crypto ──">
+            <option>BTC/USD</option><option>ETH/USD</option><option>LTC/USD</option>
+            <option>XRP/USD</option>
+          </optgroup>
+          <optgroup label="── OTC Forex ──">
+            <option>EUR/USD OTC</option>
+            <option>GBP/USD OTC</option>
+            <option>USD/JPY OTC</option>
+            <option>AUD/USD OTC</option>
+            <option>USD/CAD OTC</option>
+            <option>USD/CHF OTC</option>
+            <option>EUR/GBP OTC</option>
+            <option>EUR/JPY OTC</option>
+            <option>GBP/JPY OTC</option>
+            <option>NZD/USD OTC</option>
+            <option>AUD/CAD OTC</option>
+            <option>AUD/JPY OTC</option>
+            <option>EUR/AUD OTC</option>
+            <option>EUR/CAD OTC</option>
+            <option>EUR/CHF OTC</option>
+            <option>GBP/AUD OTC</option>
+            <option>GBP/CAD OTC</option>
+            <option>GBP/CHF OTC</option>
+            <option>CAD/JPY OTC</option>
+            <option>CHF/JPY OTC</option>
+          </optgroup>
+          <optgroup label="── OTC Crypto ──">
+            <option>BTC/USD OTC</option>
+            <option>ETH/USD OTC</option>
+            <option>LTC/USD OTC</option>
+            <option>XRP/USD OTC</option>
+          </optgroup>
+          <optgroup label="── OTC Stocks ──">
+            <option>Apple OTC</option>
+            <option>Amazon OTC</option>
+            <option>Google OTC</option>
+            <option>Microsoft OTC</option>
+            <option>Tesla OTC</option>
+            <option>Facebook OTC</option>
+            <option>Twitter OTC</option>
+          </optgroup>
+          <optgroup label="── Indices ──">
+            <option>US 100</option><option>US 500</option><option>Germany 40</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Timeframe</div>
+      <div class="select-wrap">
+        <select id="timeframe">
+          <option value="M1">M1 – 1 Minute</option>
+          <option value="M5" selected>M5 – 5 Minutes</option>
+          <option value="M15">M15 – 15 Minutes</option>
+          <option value="M30">M30 – 30 Minutes</option>
+          <option value="H1">H1 – 1 Hour</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EXPIRY ── -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-label">Expiry Time</div>
+    <div class="expiry-grid" id="expiry-pills">
+      <div class="expiry-pill active" data-val="1 min">1 MIN</div>
+      <div class="expiry-pill" data-val="2 min">2 MIN</div>
+      <div class="expiry-pill" data-val="5 min">5 MIN</div>
+      <div class="expiry-pill" data-val="10 min">10 MIN</div>
+      <div class="expiry-pill" data-val="15 min">15 MIN</div>
+      <div class="expiry-pill" data-val="30 min">30 MIN</div>
+    </div>
+  </div>
+
+  <!-- ── SESSION & TREND ── -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-label">Market Session</div>
+      <div class="session-grid" id="session-pills">
+        <div class="session-pill active" data-val="London">🇬🇧 London</div>
+        <div class="session-pill" data-val="New York">🇺🇸 New York</div>
+        <div class="session-pill" data-val="Tokyo">🇯🇵 Tokyo</div>
+        <div class="session-pill" data-val="Sydney">🇦🇺 Sydney</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Trend Bias</div>
+      <div class="trend-grid">
+        <div class="trend-btn bull active" data-val="Bullish">📈 BULL</div>
+        <div class="trend-btn bear" data-val="Bearish">📉 BEAR</div>
+        <div class="trend-btn side" data-val="Sideways">↔ SIDE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONTEXT ── -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-label">Market Context (Optional)</div>
+    <textarea id="context" placeholder="e.g. Price just bounced off support, RSI oversold at 28, big green candle forming, news event in 30 mins..."></textarea>
+  </div>
+
+  <!-- Generate -->
+  <button class="btn-generate" id="btn-gen" onclick="generateSignal()">
+    <div class="shimmer"></div>
+    ⚡ GENERATE SIGNAL
+  </button>
+
+  <!-- Output -->
+  <div id="signal-output"></div>
+
+  </div><!-- end signals page -->
+
+  <!-- TRACKER PAGE -->
+  <div class="page" id="page-tracker">
+    <div style="text-align:center;padding:20px 0 18px"><div style="font-family:Orbitron,monospace;font-size:18px;font-weight:900;color:#fff;letter-spacing:2px">SIGNAL <span style="color:var(--accent)">TRACKER</span></div><div style="font-size:11px;color:var(--muted);letter-spacing:3px;margin-top:4px;font-family:Share Tech Mono,monospace">WIN / LOSS JOURNAL</div></div>
+    <div class="stats-row" id="stats-row">
+      <div class="stat-box total"><div class="stat-num" id="stat-total">0</div><div class="stat-lbl">Total</div></div>
+      <div class="stat-box wins"><div class="stat-num" id="stat-wins">0</div><div class="stat-lbl">Wins</div></div>
+      <div class="stat-box losses"><div class="stat-num" id="stat-losses">0</div><div class="stat-lbl">Losses</div></div>
+      <div class="stat-box winrate"><div class="stat-num" id="stat-wr">0%</div><div class="stat-lbl">Win Rate</div></div>
+    </div>
+    <div class="winrate-bar-wrap card" style="padding:16px;">
+      <div class="card-label">Performance Bar</div>
+      <div class="winrate-bar-bg"><div class="winrate-bar-win" id="wr-bar-win" style="width:0%"></div><div class="winrate-bar-loss" id="wr-bar-loss" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;font-family:Share Tech Mono,monospace"><span style="color:var(--green)">● WINS</span><span style="color:var(--red)">LOSSES ●</span></div>
+    </div>
+    <div class="log-controls">
+      <button class="filter-btn active" onclick="filterLog('all',this)">ALL</button>
+      <button class="filter-btn" onclick="filterLog('win',this)">WINS</button>
+      <button class="filter-btn" onclick="filterLog('loss',this)">LOSSES</button>
+      <button class="filter-btn" onclick="filterLog('pending',this)">PENDING</button>
+      <button class="btn-clear-log" onclick="clearLog()">🗑</button>
+    </div>
+    <div id="log-list"></div>
+  </div><!-- end tracker page -->
+
+  <div class="disclaimer">
+    ⚠️ Trading involves risk. Past performance does not guarantee future results. Trade responsibly.
+  </div>
+</div>
+
+<script>
+// ── Pill selection logic ──
+document.querySelectorAll('#expiry-pills .expiry-pill').forEach(p => {
+  p.addEventListener('click', () => {
+    document.querySelectorAll('#expiry-pills .expiry-pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+  });
+});
+document.querySelectorAll('#session-pills .session-pill').forEach(p => {
+  p.addEventListener('click', () => {
+    document.querySelectorAll('#session-pills .session-pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+  });
+});
+document.querySelectorAll('.trend-btn').forEach(p => {
+  p.addEventListener('click', () => {
+    document.querySelectorAll('.trend-btn').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+  });
+});
+
+function getSelected(selector) {
+  return document.querySelector(selector + ' .active')?.dataset.val || '';
+}
+
+function getNow() {
+  return new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) + ' UTC';
+}
+
+function getDate() {
+  return new Date().toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+}
+
+async function generateSignal() {
+  const asset = document.getElementById('asset').value;
+  const tf = document.getElementById('timeframe').value;
+  const expiry = getSelected('#expiry-pills');
+  const session = getSelected('#session-pills');
+  const trend = getSelected('.trend-btn') || 'Bullish';
+  const context = document.getElementById('context').value.trim();
+
+  const btn = document.getElementById('btn-gen');
+  const output = document.getElementById('signal-output');
+
+  btn.disabled = true;
+  btn.innerHTML = `<div class="shimmer"></div><span class="loading-dots"><span></span><span></span><span></span></span> ANALYSING...`;
+
+  output.style.display = 'block';
+  output.innerHTML = `<div class="signal-card"><div class="signal-body" style="text-align:center;padding:40px;"><div class="loading-dots"><span></span><span></span><span></span></div><div style="margin-top:14px;color:var(--muted);font-size:13px;letter-spacing:2px;">AI ENGINE PROCESSING...</div></div></div>`;
+
+  const prompt = `You are an expert binary options technical analyst for IQ Option. Generate a precise trading signal.
+
+INPUT DATA:
+- Asset: ${asset}
+- Timeframe: ${tf}
+- Expiry: ${expiry}
+- Market Session: ${session}
+- Trend Bias: ${trend}
+- Extra Context: ${context || 'None provided'}
+
+Your task: Analyze this setup and produce a signal. Return ONLY valid JSON with these exact keys:
+{
+  "direction": "CALL" or "PUT",
+  "confidence": number 60-95,
+  "reasons": ["short reason 1", "short reason 2", "short reason 3"],
+  "analysis": "2-3 sentence market analysis explaining the trade setup technically",
+  "risk": "LOW" or "MEDIUM" or "HIGH",
+  "entry_note": "brief note on entry timing or condition"
+}
+
+Base the direction on the trend bias, session characteristics, and any context. Be realistic - not all setups are 90%+ confidence. Return ONLY raw JSON, no markdown.`;
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await resp.json();
+    const raw = data.content?.find(b => b.type === 'text')?.text || '';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const sig = JSON.parse(clean);
+
+    renderSignal(sig, { asset, tf, expiry, session });
+
+  } catch(e) {
+    output.innerHTML = `<div class="error-box">⚠️ Signal generation failed. Please try again.<br><small style="opacity:.6">${e.message}</small></div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = `<div class="shimmer"></div>⚡ GENERATE SIGNAL`;
+}
+
+function renderSignal(sig, meta) {
+  const isCall = sig.direction === 'CALL';
+  const now = getNow();
+  const date = getDate();
+  const riskColor = sig.risk === 'LOW' ? '#00e676' : sig.risk === 'HIGH' ? '#ff1744' : '#ffd740';
+
+  // Telegram message
+  const emoji = isCall ? '🟢' : '🔴';
+  const arrow = isCall ? '📈' : '📉';
+  const tgMsg = `${emoji} *SIGNAL ALERT* ${emoji}
+━━━━━━━━━━━━━━━━
+🎯 Asset: *${meta.asset}*
+⚡ Direction: *${sig.direction} ${isCall ? '↑' : '↓'}*
+⏱ Expiry: *${meta.expiry}*
+📊 Timeframe: *${meta.tf}*
+🕐 Time: *${now}*
+━━━━━━━━━━━━━━━━
+💡 Confidence: *${sig.confidence}%*
+⚠️ Risk: *${sig.risk}*
+━━━━━━━━━━━━━━━━
+📝 Entry: ${sig.entry_note}
+━━━━━━━━━━━━━━━━
+✅ ${sig.reasons[0]}
+✅ ${sig.reasons[1]}
+✅ ${sig.reasons[2] || ''}
+━━━━━━━━━━━━━━━━
+🤖 GhostFX Signal Bot | IQ Option
+⚠️ Trading involves risk. Trade responsibly.`;
+
+  const output = document.getElementById('signal-output');
+  output.style.display = 'block';
+  output.innerHTML = `
+<div class="signal-card">
+  <div class="signal-header">
+    <div class="signal-header-title">⚡ SIGNAL GENERATED</div>
+    <div class="signal-time">${now} · ${date}</div>
+  </div>
+  <div class="signal-body">
+
+    <div class="direction-banner ${isCall ? 'call' : 'put'}">
+      <span class="arrow">${isCall ? '↑' : '↓'}</span>
+      <span>${sig.direction}</span>
+      <span style="font-size:16px;opacity:.6">${meta.asset}</span>
+    </div>
+
+    <div class="signal-meta">
+      <div class="meta-item">
+        <div class="meta-key">Expiry</div>
+        <div class="meta-val">${meta.expiry}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-key">Session</div>
+        <div class="meta-val">${meta.session}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-key">Risk</div>
+        <div class="meta-val" style="color:${riskColor}">${sig.risk}</div>
+      </div>
+    </div>
+
+    <div class="confidence-wrap">
+      <div class="conf-header">
+        <div class="conf-label">Signal Confidence</div>
+        <div class="conf-pct">${sig.confidence}%</div>
+      </div>
+      <div class="conf-bar-bg">
+        <div class="conf-bar-fill" id="conf-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="analysis-box">${sig.analysis}
+
+📌 Entry note: ${sig.entry_note}
+
+✅ ${sig.reasons.join('\n✅ ')}</div>
+
+    <div class="tg-preview">
+      <div class="tg-badge">TELEGRAM FORMAT</div>
+      <pre id="tg-text" style="white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.8">${tgMsg}</pre>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-copy" onclick="copyTelegram()">📋 Copy Telegram Message</button>
+      <button class="btn-new" onclick="document.getElementById('signal-output').style.display='none'">✕ Clear</button>
+    </div>
+  </div>
+</div>`;
+
+  // Animate confidence bar
+  setTimeout(() => {
+    document.getElementById('conf-bar').style.width = sig.confidence + '%';
+  }, 100);
+
+  output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  window._tgMsg = tgMsg;
+  logSignal(sig, meta);
+}
+
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  document.getElementById('nav-' + tab).classList.add('active');
+  if (tab === 'tracker') renderLog();
+}
+
+// ── Signal Log Storage (in-memory + localStorage fallback) ──
+let signalLog = [];
+try { signalLog = JSON.parse(localStorage.getItem('ghostfx_log') || '[]'); } catch(e) { signalLog = []; }
+
+function saveLog() {
+  try { localStorage.setItem('ghostfx_log', JSON.stringify(signalLog)); } catch(e) {}
+}
+
+// Called after signal is generated to auto-log it as pending
+function logSignal(sig, meta) {
+  const entry = {
+    id: Date.now(),
+    asset: meta.asset,
+    direction: sig.direction,
+    expiry: meta.expiry,
+    confidence: sig.confidence,
+    time: getNow(),
+    date: getDate(),
+    result: 'pending'
+  };
+  signalLog.unshift(entry);
+  if (signalLog.length > 200) signalLog = signalLog.slice(0, 200);
+  saveLog();
+}
+
+function setResult(id, result) {
+  const entry = signalLog.find(e => e.id === id);
+  if (entry) { entry.result = result; saveLog(); renderLog(); updateStats(); }
+}
+
+function deleteEntry(id) {
+  signalLog = signalLog.filter(e => e.id !== id);
+  saveLog(); renderLog(); updateStats();
+}
+
+let currentFilter = 'all';
+function filterLog(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderLog();
+}
+
+function updateStats() {
+  const completed = signalLog.filter(e => e.result !== 'pending');
+  const wins = signalLog.filter(e => e.result === 'win').length;
+  const losses = signalLog.filter(e => e.result === 'loss').length;
+  const total = completed.length;
+  const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
+  document.getElementById('stat-total').textContent = signalLog.length;
+  document.getElementById('stat-wins').textContent = wins;
+  document.getElementById('stat-losses').textContent = losses;
+  document.getElementById('stat-wr').textContent = wr + '%';
+  const winPct = total > 0 ? (wins / total * 100) : 0;
+  const lossPct = total > 0 ? (losses / total * 100) : 0;
+  setTimeout(() => {
+    const wb = document.getElementById('wr-bar-win');
+    const lb = document.getElementById('wr-bar-loss');
+    if (wb) wb.style.width = winPct + '%';
+    if (lb) lb.style.width = lossPct + '%';
+  }, 100);
+}
+
+function renderLog() {
+  updateStats();
+  const list = document.getElementById('log-list');
+  if (!list) return;
+  const filtered = currentFilter === 'all' ? signalLog : signalLog.filter(e => e.result === currentFilter);
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div>' + (currentFilter === 'all' ? '📋' : currentFilter === 'win' ? '🏆' : currentFilter === 'loss' ? '📉' : '⏳') + '</div>' + (currentFilter === 'all' ? 'No signals logged yet.<br>Generate a signal to start tracking.' : 'No ' + currentFilter + 's recorded yet.') + '</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(e => `
+    <div class="log-entry" id="entry-${e.id}">
+      <div class="log-dir ${e.direction.toLowerCase()}">${e.direction === 'CALL' ? '↑' : '↓'} ${e.direction}</div>
+      <div class="log-info">
+        <div class="log-asset">${e.asset}</div>
+        <div class="log-meta">${e.expiry} · ${e.confidence}% conf · ${e.time}</div>
+      </div>
+      ${e.result === 'pending'
+        ? `<button class="log-result pending" onclick="showResultPicker(${e.id})">⏳ PENDING</button>`
+        : `<button class="log-result ${e.result}" onclick="showResultPicker(${e.id})">${e.result === 'win' ? '✅ WIN' : '❌ LOSS'}</button>`
+      }
+      <button class="log-delete" onclick="deleteEntry(${e.id})">🗑</button>
+    </div>
+  `).join('');
+}
+
+function showResultPicker(id) {
+  const existing = document.getElementById('picker-' + id);
+  if (existing) { existing.remove(); return; }
+  const entry = document.getElementById('entry-' + id);
+  if (!entry) return;
+  const picker = document.createElement('div');
+  picker.id = 'picker-' + id;
+  picker.style.cssText = 'display:flex;gap:8px;padding:10px 14px;background:rgba(255,255,255,0.04);border-top:1px solid var(--border);border-radius:0 0 10px 10px;justify-content:center;';
+  picker.innerHTML = `
+    <button onclick="setResult(${id},'win');document.getElementById('picker-${id}')?.remove()" style="flex:1;padding:8px;border-radius:8px;background:rgba(0,230,118,0.12);border:1px solid var(--green);color:var(--green);font-weight:700;cursor:pointer;font-size:13px;">✅ WIN</button>
+    <button onclick="setResult(${id},'loss');document.getElementById('picker-${id}')?.remove()" style="flex:1;padding:8px;border-radius:8px;background:rgba(255,23,68,0.1);border:1px solid var(--red);color:var(--red);font-weight:700;cursor:pointer;font-size:13px;">❌ LOSS</button>
+    <button onclick="setResult(${id},'pending');document.getElementById('picker-${id}')?.remove()" style="padding:8px 12px;border-radius:8px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:13px;">↺</button>
+  `;
+  // Insert after the entry row
+  entry.insertAdjacentElement('afterend', picker);
+}
+
+function clearLog() {
+  if (!confirm('Clear all signal history? This cannot be undone.')) return;
+  signalLog = []; saveLog(); renderLog(); updateStats();
+}
+
+function copyTelegram() {
+  if (!window._tgMsg) return;
+  navigator.clipboard.writeText(window._tgMsg).then(() => {
+    const btn = document.querySelector('.btn-copy');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Telegram Message', 2000);
+  });
+}
+</script>
+
+<script>
+// PWA Install Banner
+let deferredPrompt;
+const banner = document.createElement('div');
+banner.id = 'install-banner';
+banner.style.cssText = 'display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0a1525,#112040);border:1px solid #00c8ff;border-radius:14px;padding:14px 20px;z-index:9999;width:90%;max-width:400px;box-shadow:0 0 30px rgba(0,200,255,0.25);align-items:center;gap:12px;font-family:sans-serif;';
+banner.innerHTML = '<div style="font-size:26px">📲</div><div style="flex:1"><div style="color:#fff;font-weight:700;font-size:14px">Install GhostFX App</div><div style="color:#3d6080;font-size:12px;margin-top:2px">Add to home screen for quick access</div></div><button id="install-btn" style="background:linear-gradient(135deg,#0055cc,#00aaff);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 16px;cursor:pointer;">INSTALL</button><button id="dismiss-btn" style="background:none;border:none;color:#3d6080;font-size:20px;cursor:pointer;padding:0 4px;">✕</button>';
+document.body.appendChild(banner);
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); deferredPrompt = e; banner.style.display = 'flex';
+});
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('install-btn').addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') banner.style.display = 'none';
+    deferredPrompt = null;
+  });
+  document.getElementById('dismiss-btn').addEventListener('click', () => banner.style.display = 'none');
+});
+window.addEventListener('appinstalled', () => banner.style.display = 'none');
+
+// iOS Safari instruction banner
+const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+if (isIOS && !window.navigator.standalone) {
+  const ib = document.createElement('div');
+  ib.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0a1525,#112040);border:1px solid #00c8ff;border-radius:14px;padding:16px 18px;z-index:9999;width:90%;max-width:400px;box-shadow:0 0 30px rgba(0,200,255,0.2);font-family:sans-serif;text-align:center;';
+  ib.innerHTML = '<div style="color:#00c8ff;font-weight:700;font-size:13px;margin-bottom:8px">📲 Add to iPhone Home Screen</div><div style="color:#c5d8f0;font-size:12px;line-height:1.7">Tap the <strong style="color:#fff">Share button ⎙</strong> at the bottom of Safari, then tap <strong style="color:#fff">"Add to Home Screen"</strong></div><button onclick="this.parentElement.remove()" style="margin-top:12px;background:none;border:1px solid #3d6080;border-radius:6px;color:#3d6080;padding:5px 18px;cursor:pointer;font-size:12px;">Got it</button>';
+  document.body.appendChild(ib);
+}
+</script>
+
+</body>
+</html>
