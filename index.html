@@ -382,6 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
   .log-result.win { background:rgba(0,230,118,0.12); color:var(--green); border:1px solid rgba(0,230,118,0.3); }
   .log-result.loss { background:rgba(255,23,68,0.12); color:var(--red); border:1px solid rgba(255,23,68,0.3); }
   .log-result.pending { background:rgba(255,215,64,0.1); color:var(--gold); border:1px solid rgba(255,215,64,0.3); }
+  .log-timestamp { font-size:10px; color:var(--accent); margin-top:3px; font-family:'Share Tech Mono',monospace; letter-spacing:0.5px; }
   .log-delete { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:0 4px; }
   .log-delete:hover { color:var(--red); }
   .empty-state { text-align:center; padding:50px 20px; color:var(--muted); font-size:13px; letter-spacing:1px; }
@@ -879,6 +880,7 @@ function logSignal(sig, meta) {
     asset: meta.asset,
     direction: sig.direction,
     expiry: meta.expiry,
+    tf: meta.tf,
     confidence: sig.confidence,
     time: getNow(),
     date: getDate(),
@@ -941,7 +943,8 @@ function renderLog() {
       <div class="log-dir ${e.direction.toLowerCase()}">${e.direction === 'CALL' ? '↑' : '↓'} ${e.direction}</div>
       <div class="log-info">
         <div class="log-asset">${e.asset}</div>
-        <div class="log-meta">${e.expiry} · ${e.confidence}% conf · ${e.time}</div>
+        <div class="log-meta">${e.expiry} · ${e.confidence}% conf · TF: ${e.tf || 'M5'}</div>
+        <div class="log-timestamp">📅 ${e.date} &nbsp;🕐 ${e.time}</div>
       </div>
       ${e.result === 'pending'
         ? `<button class="log-result pending" onclick="showResultPicker(${e.id})">⏳ PENDING</button>`
