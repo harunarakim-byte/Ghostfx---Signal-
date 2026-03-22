@@ -906,34 +906,9 @@ Base the direction on the trend bias, session characteristics, and any context. 
     }
   }
 
-  // Block if danger streak — auto release after 15 minutes
+  // Streak warning only — no block
   if (streak >= 3) {
-    const blockKey = 'ghostfx_block_time';
-    let blockTime = null;
-    try { blockTime = localStorage.getItem(blockKey); } catch(e) {}
-
-    const now = Date.now();
-    const fifteenMins = 15 * 60 * 1000;
-
-    if (!blockTime) {
-      // First time hitting block — set timestamp
-      try { localStorage.setItem(blockKey, now.toString()); } catch(e) {}
-      blockTime = now.toString();
-    }
-
-    const elapsed = now - parseInt(blockTime);
-    const remaining = Math.max(0, Math.ceil((fifteenMins - elapsed) / 60000));
-
-    if (elapsed < fifteenMins) {
-      btn.disabled = false;
-      btn.innerHTML = '<div class="shimmer"></div>⚡ GENERATE SIGNAL';
-      output.style.display = 'block';
-      output.innerHTML = '<div class="streak-banner"><div class="streak-title">🛑 TRADING BLOCKED</div><div class="streak-msg">You have ' + streak + ' losses in a row.<br>Take a <strong>' + remaining + ' minute</strong> break to protect your account! 💪<br><br><button onclick="forceUnblock()" style="margin-top:8px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;color:#fff;padding:8px 20px;cursor:pointer;font-size:13px;">I understand the risk — Unblock</button></div></div>';
-      return;
-    } else {
-      // 15 mins passed — auto unblock
-      try { localStorage.removeItem(blockKey); } catch(e) {}
-    }
+    alerts.push({ type:'danger', icon:'🛑', msg:'<strong>Stop Trading Alert!</strong> You have <strong>' + streak + '</strong> consecutive losses. Consider taking a break to protect your account! 💪' });
   }
 
   try {
