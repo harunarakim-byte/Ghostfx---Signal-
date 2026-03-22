@@ -744,11 +744,20 @@ function generateLocalSignal(asset, tf, expiry, session, trend, context) {
   if (ctx.includes('breakout') || ctx.includes('break out')) { if(trend==='Bullish') callScore+=15; else putScore+=15; }
   if (ctx.includes('reversal')) { if(trend==='Bullish') putScore+=10; else callScore+=10; }
 
-  // Randomize slightly for realism
-  callScore += Math.floor(Math.random() * 10);
-  putScore += Math.floor(Math.random() * 10);
+  // Randomize slightly for realism — small range so trend always dominates
+  callScore += Math.floor(Math.random() * 5);
+  putScore += Math.floor(Math.random() * 5);
 
-  const direction = callScore >= putScore ? 'CALL' : 'PUT';
+  // Trend is king — enforce it directly
+  let direction;
+  if (trend === 'Bearish') {
+    direction = putScore >= callScore ? 'PUT' : (Math.random() > 0.25 ? 'PUT' : 'CALL');
+  } else if (trend === 'Bullish') {
+    direction = callScore >= putScore ? 'CALL' : (Math.random() > 0.25 ? 'CALL' : 'PUT');
+  } else {
+    // Sideways — purely score based
+    direction = callScore > putScore ? 'CALL' : 'PUT';
+  }
   const isCall = direction === 'CALL';
   const scoreDiff = Math.abs(callScore - putScore);
 
