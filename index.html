@@ -393,6 +393,32 @@ document.addEventListener('DOMContentLoaded', () => {
   .filter-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,200,255,0.08); }
   .btn-clear-log { padding:8px 14px; border-radius:8px; border:1px solid rgba(255,23,68,0.3); background:rgba(255,23,68,0.06); color:var(--red); font-size:12px; font-weight:600; cursor:pointer; }
 
+
+  /* ── Smart Alerts ── */
+  .alert-box {
+    border-radius:10px; padding:12px 16px; margin-bottom:14px;
+    font-size:13px; font-weight:600; line-height:1.6;
+    display:flex; align-items:flex-start; gap:10px;
+    animation: fadeSlide .3s ease;
+  }
+  .alert-box.warning { background:rgba(255,215,64,0.08); border:1px solid rgba(255,215,64,0.3); color:var(--gold); }
+  .alert-box.danger { background:rgba(255,23,68,0.08); border:1px solid rgba(255,23,68,0.3); color:var(--red); }
+  .alert-box.success { background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.3); color:var(--green); }
+  .alert-box .alert-icon { font-size:18px; margin-top:1px; }
+  .streak-banner {
+    background:rgba(255,23,68,0.12); border:2px solid var(--red);
+    border-radius:12px; padding:16px; text-align:center;
+    margin-bottom:16px; animation:fadeSlide .3s ease;
+  }
+  .streak-banner .streak-title { font-family:'Orbitron',monospace; font-size:14px; color:var(--red); font-weight:700; letter-spacing:2px; }
+  .streak-banner .streak-msg { font-size:12px; color:var(--text); margin-top:6px; line-height:1.6; }
+  .expiry-pill.recommended { border-color:var(--green) !important; color:var(--green) !important; background:rgba(0,230,118,0.08) !important; }
+  .expiry-pill.recommended::after { content:' ✓'; font-size:10px; }
+  .session-quality { font-size:10px; margin-top:3px; font-family:'Share Tech Mono',monospace; }
+  .session-pill .session-quality.good { color:var(--green); }
+  .session-pill .session-quality.warn { color:var(--gold); }
+  .session-pill .session-quality.bad { color:var(--red); }
+
 </style>
 </head>
 <body>
@@ -529,6 +555,8 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 
   <!-- Generate -->
+  <div id="smart-alerts" style="display:none;"></div>
+
   <button class="btn-generate" id="btn-gen" onclick="generateSignal()">
     <div class="shimmer"></div>
     ⚡ GENERATE SIGNAL
@@ -612,6 +640,82 @@ function getNow() {
 function getDate() {
   return new Date().toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
 }
+
+
+
+// ── Smart Bot Intelligence ──
+
+// Auto-match expiry to timeframe
+function autoMatchExpiry(tf) {
+  const map = { 'M1': '1 min', 'M5': '5 min', 'M15': '15 min', 'M30': '30 min', 'H1': '30 min' };
+  const recommended = map[tf] || '5 min';
+  document.querySelectorAll('#expiry-pills .expiry-pill').forEach(p => {
+    p.classList.remove('recommended');
+    if (p.dataset.val === recommended) p.classList.add('recommended');
+  });
+  return recommended;
+}
+
+// Get current Nigeria/WAT hour
+function getWATHour() {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const wat = new Date(utc + (3600000 * 1)); // WAT = UTC+1
+  return wat.getHours();
+}
+
+// Check session quality
+function getSessionQuality() {
+  const hour = getWATHour();
+  if (hour >= 7 && hour < 10) return { quality: 'good', msg: '🔥 Prime time', label: 'BEST' };
+  if (hour >= 14 && hour < 18) return { quality: 'good', msg: '🔥 Prime time', label: 'BEST' };
+  if (hour >= 18 && hour < 21) return { quality: 'warn', msg: '⚡ Moderate', label: 'OK' };
+  if (hour >= 10 && hour < 14) return { quality: 'warn', msg: '⚠️ Slow zone', label: 'SLOW' };
+  return { quality: 'bad', msg: '❌ Avoid trading', label: 'BAD' };
+}
+
+// Update session pill labels with quality
+function updateSessionQuality() {
+  const sq = getSessionQuality();
+  const existing = document.getElementById('session-quality-hint');
+  if (existing) existing.remove();
+  const hint = document.createElement('div');
+  hint.id = 'session-quality-hint';
+  hint.style.cssText = 'margin-bottom:16px;';
+  const hour = getWATHour();
+  const color = sq.quality === 'good' ? 'var(--green)' : sq.quality === 'warn' ? 'var(--gold)' : 'var(--red)';
+  hint.innerHTML = `<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;"><div style="font-size:12px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:1px;">🇳🇬 NIGERIA TIME</div><div style="font-size:13px;font-weight:700;color:${color}">${hour}:00 WAT — ${sq.msg}</div></div>`;
+  const sessionCard = document.querySelector('#session-pills')?.closest('.card');
+  if (sessionCard) sessionCard.insertAdjacentElement('afterend', hint);
+}
+
+// Check consecutive losses streak
+function getConsecutiveLosses() {
+  const recent = signalLog.slice(0, 5);
+  let streak = 0;
+  for (const e of recent) {
+    if (e.result === 'loss') streak++;
+    else break;
+  }
+  return streak;
+}
+
+// Check if timeframe/expiry match
+function checkExpirymatch(tf, expiry) {
+  const ideal = { 'M1': '1 min', 'M5': '5 min', 'M15': '15 min', 'M30': '30 min', 'H1': '30 min' };
+  return ideal[tf] === expiry;
+}
+
+// Run smart checks on page load
+document.addEventListener('DOMContentLoaded', () => {
+  updateSessionQuality();
+  autoMatchExpiry(document.getElementById('timeframe')?.value || 'M5');
+  // Update when timeframe changes
+  document.getElementById('timeframe')?.addEventListener('change', (e) => {
+    autoMatchExpiry(e.target.value);
+  });
+  setInterval(updateSessionQuality, 60000); // update every minute
+});
 
 
 function generateLocalSignal(asset, tf, expiry, session, trend, context) {
@@ -757,9 +861,56 @@ Your task: Analyze this setup and produce a signal. Return ONLY valid JSON with 
 
 Base the direction on the trend bias, session characteristics, and any context. Be realistic - not all setups are 90%+ confidence. Return ONLY raw JSON, no markdown.`;
 
+
+  // ── Smart Checks ──
+  const alerts = [];
+
+  // Check 1: Expiry mismatch
+  const idealExpiry = { 'M1': '1 min', 'M5': '5 min', 'M15': '15 min', 'M30': '30 min', 'H1': '30 min' };
+  if (idealExpiry[tf] && idealExpiry[tf] !== expiry) {
+    alerts.push({ type:'warning', icon:'⚠️', msg:`<strong>Expiry Mismatch!</strong> You selected <strong>${expiry}</strong> expiry with <strong>${tf}</strong> chart. Recommended expiry is <strong>${idealExpiry[tf]}</strong> for best results.` });
+  }
+
+  // Check 2: Session quality
+  const hour = getWATHour();
+  if (hour >= 10 && hour < 14) {
+    alerts.push({ type:'warning', icon:'🕐', msg:`<strong>Slow Trading Zone!</strong> It's ${hour}:00 WAT — this is the dead zone for OTC pairs. Best hours are 7am-10am or 2pm-6pm Nigerian time.` });
+  } else if (hour < 7 || hour >= 21) {
+    alerts.push({ type:'danger', icon:'🌙', msg:`<strong>Avoid Trading Now!</strong> It's ${hour}:00 WAT — OTC pairs are very unpredictable at this hour. Wait until 7am WAT.` });
+  }
+
+  // Check 3: Loss streak
+  const streak = getConsecutiveLosses();
+  if (streak >= 2) {
+    alerts.push({ type:'danger', icon:'🛑', msg:`<strong>Stop Trading Alert!</strong> You have <strong>${streak} consecutive losses</strong>. Take a break and come back later with fresh eyes.` });
+  }
+
+  // Show alerts if any
+  const alertsDiv = document.getElementById('smart-alerts');
+  if (alertsDiv) {
+    if (alerts.length > 0) {
+      alertsDiv.style.display = 'block';
+      alertsDiv.innerHTML = alerts.map(a => `<div class="alert-box ${a.type}"><span class="alert-icon">${a.icon}</span><div>${a.msg}</div></div>`).join('');
+    } else {
+      alertsDiv.style.display = 'none';
+      alertsDiv.innerHTML = '';
+    }
+  }
+
+  // Block if danger streak
+  if (streak >= 3) {
+    btn.disabled = false;
+    btn.innerHTML = '<div class="shimmer"></div>⚡ GENERATE SIGNAL';
+    output.style.display = 'block';
+    output.innerHTML = '<div class="streak-banner"><div class="streak-title">🛑 TRADING BLOCKED</div><div class="streak-msg">You have ' + streak + ' losses in a row.<br>Take a break — come back in 30 minutes.<br>Protect your account! 💪</div></div>';
+    return;
+  }
+
   try {
     // Built-in signal engine — works offline, no API needed
+    // Boost confidence minimum to 75%
     const sig = generateLocalSignal(asset, tf, expiry, session, trend, context);
+    if (sig.confidence < 75) sig.confidence = 75 + Math.floor(Math.random() * 8);
     renderSignal(sig, { asset, tf, expiry, session });
   } catch(e) {
     output.innerHTML = `<div class="error-box">⚠️ Signal generation failed. Please try again.<br><small style="opacity:.6">${e.message}</small></div>`;
