@@ -906,13 +906,34 @@ Base the direction on the trend bias, session characteristics, and any context. 
     }
   }
 
-  // Block if danger streak
+  // Block if danger streak — auto release after 15 minutes
   if (streak >= 3) {
-    btn.disabled = false;
-    btn.innerHTML = '<div class="shimmer"></div>⚡ GENERATE SIGNAL';
-    output.style.display = 'block';
-    output.innerHTML = '<div class="streak-banner"><div class="streak-title">🛑 TRADING BLOCKED</div><div class="streak-msg">You have ' + streak + ' losses in a row.<br>Take a break — come back in 30 minutes.<br>Protect your account! 💪</div></div>';
-    return;
+    const blockKey = 'ghostfx_block_time';
+    let blockTime = null;
+    try { blockTime = localStorage.getItem(blockKey); } catch(e) {}
+
+    const now = Date.now();
+    const fifteenMins = 15 * 60 * 1000;
+
+    if (!blockTime) {
+      // First time hitting block — set timestamp
+      try { localStorage.setItem(blockKey, now.toString()); } catch(e) {}
+      blockTime = now.toString();
+    }
+
+    const elapsed = now - parseInt(blockTime);
+    const remaining = Math.max(0, Math.ceil((fifteenMins - elapsed) / 60000));
+
+    if (elapsed < fifteenMins) {
+      btn.disabled = false;
+      btn.innerHTML = '<div class="shimmer"></div>⚡ GENERATE SIGNAL';
+      output.style.display = 'block';
+      output.innerHTML = '<div class="streak-banner"><div class="streak-title">🛑 TRADING BLOCKED</div><div class="streak-msg">You have ' + streak + ' losses in a row.<br>Take a <strong>' + remaining + ' minute</strong> break to protect your account! 💪<br><br><button onclick="forceUnblock()" style="margin-top:8px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;color:#fff;padding:8px 20px;cursor:pointer;font-size:13px;">I understand the risk — Unblock</button></div></div>';
+      return;
+    } else {
+      // 15 mins passed — auto unblock
+      try { localStorage.removeItem(blockKey); } catch(e) {}
+    }
   }
 
   try {
@@ -1147,6 +1168,22 @@ function showResultPicker(id) {
 function clearLog() {
   if (!confirm('Clear all signal history? This cannot be undone.')) return;
   signalLog = []; saveLog(); renderLog(); updateStats();
+}
+
+
+function forceUnblock() {
+  try { localStorage.removeItem('ghostfx_block_time'); } catch(e) {}
+  document.getElementById('signal-output').style.display = 'none';
+  // Reset last 3 losses to pending so streak clears
+  let cleared = 0;
+  for (let i = 0; i < signalLog.length && cleared < 3; i++) {
+    if (signalLog[i].result === 'loss') {
+      signalLog[i].result = 'pending';
+      cleared++;
+    }
+  }
+  saveLog();
+  alert('Trading unblocked! Remember: max 2 losses before stopping. Trade carefully! 🎯');
 }
 
 function copyTelegram() {
