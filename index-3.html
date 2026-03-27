@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#05080f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aviator Tracker">
+<title>Aviator Signal Tracker</title>
+<link rel="manifest" href="manifest.json">
+<style>
+/* SELF-CONTAINED — no external font CDN needed */
+:root {
+  --fn-d: 'Courier New', 'Lucida Console', monospace;
+  --fn-b: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg:   #05080f; --surf: #0b1120; --card: #0e1628;
+  --brd:  #1a2a44;
+  --red:  #e8372a; --ora: #ff6533; --gold: #f5c518;
+  --grn:  #00d968; --blu: #00aaee;
+  --txt:  #ddeeff; --mut: #4d6a8a;
+}
+*{ margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent; }
+html,body{ background:var(--bg);color:var(--txt);font-family:var(--fn-b);min-height:100vh;overflow-x:hidden; }
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,170,238,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,170,238,.04) 1px,transparent 1px);
+  background-size:36px 36px;animation:grid 18s linear infinite;
+}
+@keyframes grid{ to{background-position:0 36px;} }
+
+.w{ max-width:860px;margin:0 auto;padding:16px 12px 80px;position:relative;z-index:1; }
+
+/* HEADER */
+header{ text-align:center;padding:20px 0 16px; }
+.badge{ display:inline-block;background:var(--red);color:#fff;font-family:var(--fn-d);font-size:10px;font-weight:700;letter-spacing:3px;padding:5px 14px;border-radius:4px;margin-bottom:12px; }
+h1{ font-family:var(--fn-d);font-size:clamp(18px,5.5vw,32px);font-weight:700;letter-spacing:2px;color:var(--blu);text-shadow:0 0 22px rgba(0,170,238,.5);margin-bottom:4px; }
+.sub{ color:var(--mut);font-size:10px;letter-spacing:2px;text-transform:uppercase; }
+
+/* INSTALL BANNER */
+#ib{ display:none;align-items:center;justify-content:space-between;gap:10px;background:rgba(0,170,238,.08);border:1px solid rgba(0,170,238,.3);border-radius:12px;padding:12px 14px;margin-bottom:14px; }
+#ib.show{ display:flex; }
+.ib-t{ font-size:12px;color:var(--blu); }
+.ib-t strong{ display:block;font-size:13px; }
+.btn-inst{ background:var(--blu);color:var(--bg);border:none;padding:8px 16px;border-radius:8px;font-family:var(--fn-d);font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0; }
+
+/* DISCLAIMER */
+.disc{ background:rgba(245,197,24,.07);border:1px solid rgba(245,197,24,.26);border-radius:10px;padding:9px 12px;font-size:11px;color:#c8a020;text-align:center;margin-bottom:14px;line-height:1.6; }
+
+/* SIGNAL CARD */
+.sc{ background:var(--card);border:1px solid var(--brd);border-radius:16px;padding:22px 14px;text-align:center;margin-bottom:12px;position:relative;overflow:hidden; }
+.sc::after{ content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(0,170,238,.06) 0%,transparent 70%);pointer-events:none; }
+.plane{ font-size:30px;display:block;margin-bottom:4px;animation:fly 3s ease-in-out infinite; }
+@keyframes fly{ 0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-7px) rotate(4deg);} }
+.sl{ font-family:var(--fn-d);font-size:9px;color:var(--mut);letter-spacing:3px;text-transform:uppercase;margin-bottom:4px; }
+#sv{ font-family:var(--fn-d);font-size:clamp(36px,10vw,62px);font-weight:700;line-height:1;transition:color .3s,text-shadow .3s; }
+#sv.G{ color:var(--grn);text-shadow:0 0 26px rgba(0,217,104,.5); }
+#sv.Y{ color:var(--gold);text-shadow:0 0 26px rgba(245,197,24,.5); }
+#sv.O{ color:var(--ora);text-shadow:0 0 26px rgba(255,101,51,.5); }
+#sv.R{ color:var(--red);text-shadow:0 0 26px rgba(232,55,42,.5); }
+#sb{ display:none;padding:4px 13px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:8px;font-family:var(--fn-d); }
+#sb.G{ background:rgba(0,217,104,.12);color:var(--grn);border:1px solid rgba(0,217,104,.28); }
+#sb.Y{ background:rgba(245,197,24,.12);color:var(--gold);border:1px solid rgba(245,197,24,.28); }
+#sb.O{ background:rgba(255,101,51,.12);color:var(--ora);border:1px solid rgba(255,101,51,.28); }
+#sb.R{ background:rgba(232,55,42,.12);color:var(--red);border:1px solid rgba(232,55,42,.28); }
+#sn{ margin-top:7px;font-size:10px;color:var(--mut);font-family:var(--fn-d); }
+.cw{ margin-top:11px;display:none; }
+.cl{ font-size:9px;color:var(--mut);letter-spacing:2px;text-transform:uppercase;font-family:var(--fn-d);margin-bottom:4px; }
+.cb{ height:5px;background:var(--surf);border-radius:3px;overflow:hidden; }
+.cf{ height:100%;border-radius:3px;transition:width .5s ease,background .5s; }
+
+/* STATS */
+.stats{ display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px; }
+.sc2{ background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:11px 8px;text-align:center; }
+.sc2-l{ font-size:9px;color:var(--mut);letter-spacing:2px;text-transform:uppercase;font-family:var(--fn-d);margin-bottom:4px; }
+.sc2-v{ font-family:var(--fn-d);font-size:16px;font-weight:700;color:var(--blu); }
+
+/* INPUT BOX */
+.ib2{ background:var(--card);border:1px solid var(--brd);border-radius:14px;padding:14px 12px;margin-bottom:12px; }
+.st{ font-family:var(--fn-d);font-size:10px;font-weight:700;letter-spacing:3px;color:var(--blu);text-transform:uppercase;margin-bottom:11px;display:flex;align-items:center;gap:7px; }
+.st::before{ content:'';width:3px;height:12px;background:var(--blu);border-radius:2px;flex-shrink:0; }
+.ir{ display:flex;gap:7px;margin-bottom:9px; }
+#mi{
+  flex:1;min-width:0;background:var(--surf);border:2px solid var(--brd);
+  border-radius:10px;padding:13px 8px;color:var(--txt);
+  font-family:var(--fn-d);font-size:20px;font-weight:700;text-align:center;
+  outline:none;transition:border-color .2s,box-shadow .2s;
+  -webkit-appearance:none;appearance:none;
+}
+#mi[type=number]{ -moz-appearance:textfield; }
+#mi::-webkit-outer-spin-button,#mi::-webkit-inner-spin-button{ -webkit-appearance:none;margin:0; }
+#mi:focus{ border-color:var(--blu);box-shadow:0 0 0 3px rgba(0,170,238,.14); }
+#mi::placeholder{ color:var(--mut);font-size:12px;font-family:var(--fn-b);font-weight:400; }
+.btn{ padding:13px 12px;border:none;border-radius:10px;font-family:var(--fn-d);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:transform .15s;white-space:nowrap;flex-shrink:0; }
+.ba{ background:linear-gradient(135deg,var(--red),var(--ora));color:#fff; }
+.ba:active{ transform:scale(.95); }
+.bc{ background:var(--surf);color:var(--mut);border:1px solid var(--brd); }
+.bc:active{ color:var(--red);border-color:var(--red); }
+.qa-l{ font-size:9px;color:var(--mut);letter-spacing:1px;text-transform:uppercase;font-family:var(--fn-d);width:100%;margin-bottom:5px; }
+.qas{ display:flex;flex-wrap:wrap;gap:6px; }
+.qa{ padding:7px 11px;border-radius:7px;border:1px solid var(--brd);background:var(--surf);color:var(--txt);font-family:var(--fn-d);font-size:12px;cursor:pointer;transition:transform .12s; }
+.qa:active{ transform:scale(.93); }
+.qg{ border-color:rgba(0,217,104,.3);color:var(--grn); }
+.qy{ border-color:rgba(245,197,24,.3);color:var(--gold); }
+.qr{ border-color:rgba(232,55,42,.3);color:var(--red); }
+
+/* HISTORY */
+.hb{ background:var(--card);border:1px solid var(--brd);border-radius:14px;padding:14px 12px;margin-bottom:12px; }
+.hg{ display:flex;flex-wrap:wrap;gap:5px;max-height:138px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--brd) transparent; }
+.hi{ padding:5px 9px;border-radius:7px;font-family:var(--fn-d);font-size:12px;font-weight:700;animation:pop .2s ease; }
+@keyframes pop{ from{opacity:0;transform:scale(.5)}to{opacity:1;transform:scale(1)} }
+.c1{background:rgba(0,217,104,.1);color:var(--grn);border:1px solid rgba(0,217,104,.2);}
+.c2{background:rgba(0,170,238,.1);color:var(--blu);border:1px solid rgba(0,170,238,.2);}
+.c3{background:rgba(245,197,24,.1);color:var(--gold);border:1px solid rgba(245,197,24,.2);}
+.c4{background:rgba(255,101,51,.1);color:var(--ora);border:1px solid rgba(255,101,51,.2);}
+.c5{background:rgba(232,55,42,.1);color:var(--red);border:1px solid rgba(232,55,42,.2);}
+
+/* ANALYSIS */
+.ab{ background:var(--card);border:1px solid var(--brd);border-radius:14px;padding:14px 12px;margin-bottom:12px; }
+.zg{ display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px; }
+.zc{ border-radius:10px;padding:11px 8px;text-align:center;border:1px solid; }
+.zl{background:rgba(0,217,104,.05);border-color:rgba(0,217,104,.18);}
+.zm{background:rgba(245,197,24,.05);border-color:rgba(245,197,24,.18);}
+.zh{background:rgba(232,55,42,.05);border-color:rgba(232,55,42,.18);}
+.zc-l{font-size:9px;letter-spacing:2px;text-transform:uppercase;font-family:var(--fn-d);margin-bottom:3px;}
+.zl .zc-l{color:var(--grn);}.zm .zc-l{color:var(--gold);}.zh .zc-l{color:var(--red);}
+.zc-p{font-family:var(--fn-d);font-size:19px;font-weight:700;}
+.zl .zc-p{color:var(--grn);}.zm .zc-p{color:var(--gold);}.zh .zc-p{color:var(--red);}
+.zc-r{font-size:9px;color:var(--mut);margin-top:2px;font-family:var(--fn-d);}
+.sk{ display:flex;gap:4px;margin-top:11px;flex-wrap:wrap;align-items:center; }
+.sd2{ width:23px;height:23px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:var(--fn-d); }
+.ps{ background:linear-gradient(135deg,rgba(0,170,238,.07),rgba(0,217,104,.04));border:1px solid rgba(0,170,238,.2);border-radius:12px;padding:14px 12px;margin-top:11px;display:none; }
+.ps-t{ font-family:var(--fn-d);font-size:9px;color:var(--blu);letter-spacing:3px;text-transform:uppercase;margin-bottom:7px; }
+.ps-b{ font-size:13px;line-height:1.75;color:var(--txt); }
+.ps-b strong{ color:var(--gold);font-weight:700; }
+
+/* FOOTER */
+footer{ text-align:center;padding-top:16px;color:var(--mut);font-size:10px;line-height:1.9;border-top:1px solid var(--brd); }
+footer strong{ color:var(--red); }
+
+@media(max-width:480px){ .stats{grid-template-columns:repeat(2,1fr);} .sc2-v{font-size:14px;} }
+</style>
+</head>
+<body>
+<div class="w">
+
+<header>
+  <div class="badge">✈ MSPORT AVIATOR</div>
+  <h1>SIGNAL TRACKER</h1>
+  <p class="sub">Pattern Analysis · Zone Stats · Streak Detection</p>
+</header>
+
+<div id="ib">
+  <div class="ib-t"><strong>📲 Install as App</strong>Works fully offline</div>
+  <button class="btn-inst" id="instBtn">INSTALL</button>
+</div>
+
+<div class="disc">
+  ⚠️ <strong>Statistical analysis only.</strong>
+  Aviator uses a provably-fair RNG — outcomes cannot be predicted.
+  This tracks patterns from data <em>you</em> enter. Gamble responsibly.
+</div>
+
+<!-- SIGNAL CARD -->
+<div class="sc">
+  <span class="plane">✈️</span>
+  <div class="sl">Recommended Cash-Out Target</div>
+  <div id="sv" class="G">—</div>
+  <div id="sb"></div>
+  <div id="sn">Enter at least 5 rounds to generate a signal</div>
+  <div class="cw" id="cw">
+    <div class="cl">Signal Confidence</div>
+    <div class="cb"><div class="cf" id="cf" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="sc2"><div class="sc2-l">Average</div><div class="sc2-v" id="stA">—</div></div>
+  <div class="sc2"><div class="sc2-l">Median</div><div class="sc2-v" id="stM">—</div></div>
+  <div class="sc2"><div class="sc2-l">Highest</div><div class="sc2-v" style="color:var(--gold)" id="stH">—</div></div>
+  <div class="sc2"><div class="sc2-l">Rounds</div><div class="sc2-v" style="color:var(--mut)" id="stN">0</div></div>
+</div>
+
+<!-- INPUT -->
+<div class="ib2">
+  <div class="st">Log Round Result</div>
+  <div class="ir">
+    <input type="number" id="mi" placeholder="Enter multiplier e.g. 2.45"
+           inputmode="decimal" min="1.00" max="99999" step="0.01" autocomplete="off">
+    <button class="btn ba" id="addBtn">ADD ✈</button>
+    <button class="btn bc" id="clrBtn">CLR</button>
+  </div>
+  <div class="qa-l">QUICK ADD:</div>
+  <div class="qas">
+    <button class="qa qg" data-v="1.10">1.1x</button>
+    <button class="qa qg" data-v="1.20">1.2x</button>
+    <button class="qa qg" data-v="1.50">1.5x</button>
+    <button class="qa qg" data-v="1.80">1.8x</button>
+    <button class="qa qy" data-v="2.00">2.0x</button>
+    <button class="qa qy" data-v="3.00">3.0x</button>
+    <button class="qa qy" data-v="5.00">5.0x</button>
+    <button class="qa qr" data-v="10.0">10x</button>
+    <button class="qa qr" data-v="20.0">20x</button>
+    <button class="qa qr" data-v="50.0">50x</button>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="hb">
+  <div class="st">Round History</div>
+  <div class="hg" id="hg">
+    <span style="color:var(--mut);font-size:12px;font-family:monospace;">No rounds logged yet…</span>
+  </div>
+</div>
+
+<!-- ANALYSIS -->
+<div class="ab">
+  <div class="st">Zone Distribution</div>
+  <div class="zg">
+    <div class="zc zl"><div class="zc-l">Low Zone</div><div class="zc-p" id="zL">0%</div><div class="zc-r">1.00–1.99x</div></div>
+    <div class="zc zm"><div class="zc-l">Mid Zone</div><div class="zc-p" id="zM">0%</div><div class="zc-r">2.00–9.99x</div></div>
+    <div class="zc zh"><div class="zc-l">High Zone</div><div class="zc-p" id="zHi">0%</div><div class="zc-r">10x+</div></div>
+  </div>
+  <div style="margin-top:14px;">
+    <div class="st" style="font-size:9px;margin-bottom:4px;">Last 10 Rounds (left=oldest)</div>
+    <div class="sk" id="sk"></div>
+  </div>
+  <div class="ps" id="ps">
+    <div class="ps-t">📡 Pattern Signal</div>
+    <div class="ps-b" id="psb"></div>
+  </div>
+</div>
+
+<footer>
+  <strong>MSPORT AVIATOR SIGNAL TRACKER v3.0</strong><br>
+  Statistical pattern tool · Not affiliated with Msport or Spribe<br>
+  Past patterns do not guarantee future outcomes · Gamble responsibly
+</footer>
+</div>
+
+<script>
+'use strict';
+
+// ── STATE ──────────────────────────────────────────────
+var R = [];
+try{ var s=localStorage.getItem('avR3'); if(s) R=JSON.parse(s); }catch(e){}
+function save(){ try{ localStorage.setItem('avR3',JSON.stringify(R)); }catch(e){} }
+
+// ── MATH ───────────────────────────────────────────────
+function mean(a){
+  if(!a.length) return 0;
+  var s=0; for(var i=0;i<a.length;i++) s+=a[i];
+  return s/a.length;
+}
+function median(a){
+  if(!a.length) return 0;
+  var s=a.slice().sort(function(x,y){return x-y;});
+  var m=Math.floor(s.length/2);
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
+}
+function stddev(a){
+  if(a.length<2) return 0;
+  var u=mean(a), ss=0;
+  for(var i=0;i<a.length;i++) ss+=(a[i]-u)*(a[i]-u);
+  return Math.sqrt(ss/a.length);
+}
+// Weighted mean — newer entries (index 0) weigh more
+function wmean(a){
+  if(!a.length) return 0;
+  var t=0,w=0;
+  for(var i=0;i<a.length;i++){
+    var wi=1/(i+1);
+    t+=a[i]*wi; w+=wi;
+  }
+  return t/w;
+}
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function f2(n){ return Number(n.toFixed(2)); }
+function pct(n){ return Math.round(n*100)+'%'; }
+
+// ── SIGNAL ENGINE ──────────────────────────────────────
+function engine(h){
+  var n=h.length;
+  if(n<5) return null;
+
+  var w30=h.slice(0,Math.min(30,n));
+  var w10=h.slice(0,Math.min(10,n));
+  var w5 =h.slice(0,5);
+  var l3 =h.slice(0,3);
+
+  var wa  = wmean(w30);
+  var ua  = mean(w30);
+  var med = median(w30);
+  var sd  = stddev(w30);
+  var vol = sd / Math.max(ua,1);
+
+  var nL=0,nM=0,nH=0;
+  for(var i=0;i<w30.length;i++){
+    var v=w30[i];
+    if(v<2) nL++; else if(v<10) nM++; else nH++;
+  }
+  var wn=w30.length;
+  var pL=nL/wn, pM=nM/wn, pH=nH/wn;
+
+  // Count consecutive low / high from most recent
+  var consLow=0, consHigh=0;
+  for(var i=0;i<h.length;i++){ if(h[i]<2) consLow++; else break; }
+  for(var i=0;i<h.length;i++){ if(h[i]>=5) consHigh++; else break; }
+
+  var l3Low  = l3.filter(function(v){return v<2;}).length;
+  var l3High = l3.filter(function(v){return v>=5;}).length;
+  var l5Low  = w5.filter(function(v){return v<2;}).length;
+
+  // Determine regime
+  var regime;
+  if      (pL>0.55)            regime='LOW';
+  else if (pH>0.25||wa>6)      regime='HOT';
+  else if (vol>1.5)            regime='CHOP';
+  else                          regime='MID';
+
+  var base, label, cls, conf;
+
+  switch(regime){
+    case 'LOW':
+      base  = 1.20 + pL*0.30;
+      label = 'CRASH ZONE — STAY SAFE';
+      cls   = 'G';
+      conf  = clamp(0.55+pL*0.3, 0, 0.88);
+      break;
+    case 'HOT':
+      base  = clamp(wa*0.55, 1.5, 8.0);
+      label = 'HOT SESSION — MID TARGET';
+      cls   = 'Y';
+      conf  = 0.45;
+      break;
+    case 'CHOP':
+      base  = clamp(med*0.60, 1.15, 2.5);
+      label = 'HIGH VOLATILITY — CAUTION';
+      cls   = 'O';
+      conf  = 0.30;
+      break;
+    default: // MID
+      base  = clamp(med*0.72, 1.3, 5.0);
+      label = 'NORMAL SESSION';
+      cls   = 'G';
+      conf  = clamp(0.50+pM*0.2, 0, 0.88);
+  }
+
+  // Streak overrides
+  if(consLow>=4){
+    base  = clamp(base+0.20, 1.20, 2.00);
+    label = consLow+'x CRASH STREAK — CAREFUL';
+    cls   = 'G';
+    conf  = Math.min(conf+0.10, 0.88);
+  }
+  if(consHigh>=2){
+    base  = clamp(base*0.65, 1.10, 1.60);
+    label = 'POST-SPIKE — PULL BACK';
+    cls   = 'O';
+    conf  = 0.42;
+  }
+  if(l3High===3){
+    base  = 1.20;
+    label = '3x HIGH — STRONG PULLBACK';
+    cls   = 'R';
+    conf  = 0.70;
+  }
+  if(l3Low===3){
+    base  = clamp(base+0.10, 1.20, 1.60);
+    label = '3x CRASH — CONSERVATIVE ENTRY';
+    cls   = 'G';
+    conf  = Math.min(conf+0.08, 0.88);
+  }
+
+  // Volatility damping
+  if(vol>1.0){
+    var damp=clamp(1-(vol-1)*0.15, 0.70, 1.0);
+    base=clamp(base*damp, 1.10, base);
+  }
+
+  var target = f2(clamp(base, 1.10, 10.0));
+  conf       = clamp(conf, 0.20, 0.88);
+
+  return {target:target, label:label, cls:cls, conf:conf,
+          regime:regime, wa:wa, ua:ua, med:med, sd:sd, vol:vol,
+          pL:pL, pM:pM, pH:pH, consLow:consLow, consHigh:consHigh, wn:wn};
+}
+
+function patMsg(r,h){
+  if(!r) return null;
+  var lines=[];
+  if(r.consLow>=3){
+    lines.push('<strong>⚡ '+r.consLow+' consecutive crashes detected.</strong> The session has been crashing repeatedly. A mid-zone round becomes statistically more likely — but streaks can continue. Target: <strong>'+r.target+'x</strong>.');
+  } else if(r.consHigh>=2){
+    lines.push('<strong>🚀 '+r.consHigh+' high rounds in a row.</strong> After back-to-back spikes, regression toward the average is the most probable next outcome. Reduce your target.');
+  } else if(r.regime==='HOT'){
+    lines.push('<strong>🔥 Hot session detected.</strong> Weighted average over last '+r.wn+' rounds: <strong>'+f2(r.wa)+'x</strong>. Sessions don\'t stay hot forever — <strong>'+r.target+'x</strong> captures gains safely.');
+  } else if(r.regime==='LOW'){
+    lines.push('<strong>📉 Crash-heavy session.</strong> '+Math.round(r.pL*100)+'% of recent rounds landed below 2x. Small consistent wins beat waiting for a spike.');
+  } else if(r.regime==='CHOP'){
+    lines.push('<strong>⚠️ Choppy session.</strong> Volatility is high (σ='+f2(r.sd)+'). Pattern signals are unreliable. Play minimum stakes and target only <strong>'+r.target+'x</strong> until it stabilises.');
+  } else {
+    lines.push('<strong>📊 Normal session.</strong> Median: <strong>'+f2(r.med)+'x</strong> · Average: <strong>'+f2(r.ua)+'x</strong> over last '+r.wn+' rounds. Stable mid-range pattern.');
+  }
+  lines.push('<strong>Confidence: '+Math.round(r.conf*100)+'%</strong> based on '+r.wn+' rounds. More data improves accuracy.');
+  lines.push('⚠️ <strong>No signal guarantees a result.</strong> Set a session loss limit and never chase losses.');
+  return lines.join('<br><br>');
+}
+
+// ── RENDER ─────────────────────────────────────────────
+function render(){
+  var n=R.length;
+  document.getElementById('stN').textContent=n;
+
+  // history
+  var hg=document.getElementById('hg');
+  if(n===0){
+    hg.innerHTML='<span style="color:var(--mut);font-size:12px;font-family:monospace;">No rounds logged yet…</span>';
+  } else {
+    hg.innerHTML=R.slice(0,80).map(function(v){
+      var c; if(v<2)c='c1';else if(v<5)c='c2';else if(v<10)c='c3';else if(v<20)c='c4';else c='c5';
+      return '<span class="hi '+c+'">'+f2(v)+'x</span>';
+    }).join('');
+  }
+
+  // stats
+  if(n>0){
+    var a=mean(R), m=median(R), hh=Math.max.apply(null,R);
+    document.getElementById('stA').textContent=f2(a)+'x';
+    document.getElementById('stM').textContent=f2(m)+'x';
+    document.getElementById('stH').textContent=f2(hh)+'x';
+    var w=R.slice(0,Math.min(30,n)), wn=w.length;
+    var nl=w.filter(function(v){return v<2;}).length;
+    var nm=w.filter(function(v){return v>=2&&v<10;}).length;
+    var nh=w.filter(function(v){return v>=10;}).length;
+    document.getElementById('zL').textContent=pct(nl/wn);
+    document.getElementById('zM').textContent=pct(nm/wn);
+    document.getElementById('zHi').textContent=pct(nh/wn);
+  } else {
+    ['stA','stM','stH'].forEach(function(id){document.getElementById(id).textContent='—';});
+    ['zL','zM','zHi'].forEach(function(id){document.getElementById(id).textContent='0%';});
+  }
+
+  // streak bar
+  var sk=document.getElementById('sk');
+  if(n===0){ sk.innerHTML=''; }
+  else {
+    sk.innerHTML=R.slice(0,10).reverse().map(function(v){
+      var bg,col,lbl;
+      if(v<2)      {bg='rgba(0,217,104,.18)';col='#00d968';lbl='↓';}
+      else if(v<5) {bg='rgba(0,170,238,.18)';col='#00aaee';lbl='→';}
+      else if(v<10){bg='rgba(245,197,24,.18)';col='#f5c518';lbl='↑';}
+      else         {bg='rgba(232,55,42,.18)';col='#e8372a';lbl='🚀';}
+      return '<div class="sd2" style="background:'+bg+';color:'+col+'" title="'+f2(v)+'x">'+lbl+'</div>';
+    }).join('');
+  }
+
+  // signal
+  var res=engine(R);
+  var sv=document.getElementById('sv');
+  var sb=document.getElementById('sb');
+  var sn=document.getElementById('sn');
+  var cw=document.getElementById('cw');
+  var cf=document.getElementById('cf');
+
+  if(res){
+    sv.textContent=f2(res.target)+'x';
+    sv.className=res.cls;
+    sb.textContent=res.label;
+    sb.className=res.cls;
+    sb.style.display='inline-block';
+    sn.textContent='Weighted avg: '+f2(res.wa)+'x · Median: '+f2(res.med)+'x · Volatility: '+f2(res.vol*100)+'%';
+    cw.style.display='block';
+    var cp=Math.round(res.conf*100);
+    cf.style.width=cp+'%';
+    cf.style.background=res.conf>0.65?'var(--grn)':res.conf>0.45?'var(--gold)':'var(--red)';
+  } else {
+    sv.textContent='—'; sv.className='G';
+    sb.style.display='none';
+    sn.textContent='Enter at least 5 rounds to generate a signal';
+    cw.style.display='none';
+  }
+
+  // pattern message
+  var ps=document.getElementById('ps');
+  var psb=document.getElementById('psb');
+  var msg=patMsg(res,R);
+  if(msg){ ps.style.display='block'; psb.innerHTML=msg; }
+  else   { ps.style.display='none'; }
+}
+
+// ── ACTIONS ────────────────────────────────────────────
+function addRound(){
+  var inp=document.getElementById('mi');
+  var raw=inp.value.trim().replace(',','.');
+  var v=parseFloat(raw);
+  if(!raw||isNaN(v)||v<1.00){
+    inp.style.borderColor='var(--red)'; inp.focus();
+    setTimeout(function(){inp.style.borderColor='';},1200);
+    return;
+  }
+  R.unshift(f2(v));
+  save();
+  inp.value='';
+  inp.style.borderColor='var(--grn)';
+  setTimeout(function(){inp.style.borderColor='';},600);
+  render();
+}
+
+function clearAll(){
+  if(!R.length) return;
+  if(!confirm('Clear all round history?')) return;
+  R=[]; save(); render();
+}
+
+// ── EVENTS ─────────────────────────────────────────────
+document.getElementById('addBtn').addEventListener('click', addRound);
+document.getElementById('clrBtn').addEventListener('click', clearAll);
+document.getElementById('mi').addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ e.preventDefault(); addRound(); }
+});
+document.querySelectorAll('.qa').forEach(function(b){
+  b.addEventListener('click', function(){
+    R.unshift(parseFloat(b.dataset.v));
+    save(); render();
+  });
+});
+
+// ── PWA INSTALL ────────────────────────────────────────
+var _dp=null;
+var banner=document.getElementById('ib');
+var instBtn=document.getElementById('instBtn');
+
+window.addEventListener('beforeinstallprompt',function(e){
+  e.preventDefault(); _dp=e; banner.classList.add('show');
+});
+instBtn.addEventListener('click',function(){
+  if(!_dp) return;
+  _dp.prompt();
+  _dp.userChoice.then(function(c){
+    if(c.outcome==='accepted') banner.classList.remove('show');
+    _dp=null;
+  });
+});
+window.addEventListener('appinstalled',function(){ banner.classList.remove('show'); _dp=null; });
+
+// ── SERVICE WORKER ─────────────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+
+// ── INIT ───────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
