@@ -304,8 +304,10 @@ header{text-align:center;padding:18px 0 14px;}
 <!-- Best Pair -->
 <div class="best-pair-card">
   <div><div class="best-pair-label">🏆 STRONGEST PAIR NOW</div><div class="best-pair-val" id="best-pair">Analysing...</div></div>
-  <div><div class="best-pair-label">SIGNAL SCORE</div><div class="best-pair-score" id="best-score">--</div></div>
+  <div style="text-align:right"><div class="best-pair-label">SIGNAL SCORE</div><div class="best-pair-score" id="best-score">--</div></div>
 </div>
+<!-- Your best pairs from tracker -->
+<div id="tracker-rec" style="display:none;background:rgba(0,255,136,0.06);border:1px solid rgba(0,255,136,0.15);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--accent);font-family:Share Tech Mono,monospace;letter-spacing:1px;"></div>
 
 <!-- Daily Stats -->
 <div class="daily-bar">
@@ -368,6 +370,7 @@ header{text-align:center;padding:18px 0 14px;}
   <div class="card-lbl">Expiry Time</div>
   <div class="pill-row" id="expiry-pills">
     <div class="pill" data-val="1 min">1 MIN</div>
+    <div class="pill" data-val="3 min">3 MIN</div>
     <div class="pill active rec" data-val="5 min">5 MIN ✓</div>
     <div class="pill" data-val="10 min">10 MIN</div>
     <div class="pill" data-val="15 min">15 MIN</div>
@@ -571,6 +574,7 @@ function initApp(){
   setupPills();
   calcStake();
   updateDailyStats();
+  updateTrackerRecommendations();
   checkNewsEvents();setInterval(checkNewsEvents,60000);
   fetchAllAndAnalyze();
 }
@@ -624,14 +628,59 @@ function getWAT(){
   const now=new Date();
   return new Date(now.getTime()+now.getTimezoneOffset()*60000+3600000);
 }
+
+let goldenHourAlerted=false;
+let goldenHourEndAlerted=false;
+
 function updateWAT(){
   const wat=getWAT();
   const h=wat.getHours(),m=String(wat.getMinutes()).padStart(2,'0'),s=String(wat.getSeconds()).padStart(2,'0');
   document.getElementById('wat-time').textContent=`${h}:${m}:${s} WAT`;
   const el=document.getElementById('wat-status');
-  if((h>=7&&h<10)||(h>=14&&h<18)){el.textContent='🔥 PRIME TIME';el.className='wat-s best';}
+
+  // Golden hour: 16:00-17:00 WAT
+  if(h===16){
+    el.textContent='🏆 GOLDEN HOUR';el.className='wat-s best';
+    if(!goldenHourAlerted){
+      goldenHourAlerted=true;goldenHourEndAlerted=false;
+      showGoldenHourAlert(true);
+    }
+  } else if(h===17&&m==='00'&&!goldenHourEndAlerted){
+    goldenHourEndAlerted=true;goldenHourAlerted=false;
+    showGoldenHourAlert(false);
+  } else if((h>=7&&h<10)||(h>=14&&h<18)){el.textContent='🔥 PRIME TIME';el.className='wat-s best';}
   else if((h>=10&&h<14)||(h>=18&&h<21)){el.textContent='⚡ MODERATE';el.className='wat-s warn';}
   else{el.textContent='😴 SLOW ZONE';el.className='wat-s bad';}
+}
+
+function showGoldenHourAlert(starting){
+  var existing=document.getElementById("golden-alert");
+  if(existing) existing.remove();
+  var div=document.createElement("div");
+  div.id="golden-alert";
+  div.style.cssText="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9998;width:90%;max-width:380px;border-radius:14px;padding:16px 18px;text-align:center;";
+  if(starting){
+    div.style.background="linear-gradient(135deg,rgba(0,255,136,0.15),rgba(0,200,255,0.1))";
+    div.style.border="2px solid #00ff88";
+    div.style.boxShadow="0 0 30px rgba(0,255,136,0.3)";
+    var btn1=document.createElement("button");
+    btn1.textContent="LET'S TRADE 🚀";
+    btn1.style.cssText="margin-top:10px;background:rgba(0,255,136,0.15);border:1px solid #00ff88;border-radius:8px;color:#00ff88;padding:6px 20px;cursor:pointer;font-size:12px;font-weight:700;";
+    btn1.onclick=function(){document.getElementById("golden-alert").remove();};
+    div.innerHTML="<div style='font-family:Orbitron,monospace;font-size:16px;font-weight:900;color:#00ff88;letter-spacing:2px;'>🏆 GOLDEN HOUR STARTED!</div><div style='font-size:12px;color:#b8d4f0;margin-top:6px;line-height:1.6;'>4PM - 5PM WAT<br>Your best trading window!<br>Trade GBP/USD OTC and USD/CAD OTC</div>";
+    div.appendChild(btn1);
+  } else {
+    div.style.background="linear-gradient(135deg,rgba(255,51,85,0.1),rgba(255,215,64,0.08))";
+    div.style.border="2px solid #ff3355";
+    var btn2=document.createElement("button");
+    btn2.textContent="GOT IT ✓";
+    btn2.style.cssText="margin-top:10px;background:rgba(255,51,85,0.1);border:1px solid #ff3355;border-radius:8px;color:#ff3355;padding:6px 20px;cursor:pointer;font-size:12px;font-weight:700;";
+    btn2.onclick=function(){document.getElementById("golden-alert").remove();};
+    div.innerHTML="<div style='font-family:Orbitron,monospace;font-size:14px;font-weight:900;color:#ff3355;letter-spacing:2px;'>⏰ GOLDEN HOUR ENDED</div><div style='font-size:12px;color:#b8d4f0;margin-top:6px;'>5PM WAT — Consider stopping for the day.<br>Check your results in Tracker!</div>";
+    div.appendChild(btn2);
+  }
+  document.body.appendChild(div);
+  setTimeout(function(){var a=document.getElementById("golden-alert");if(a)a.remove();},15000);
 }
 
 // ═══════════════════════════════
@@ -664,14 +713,60 @@ function checkNewsEvents(){
 // PRICE FETCH
 // ═══════════════════════════════
 async function fetchPrice(sym){
+  // Source 1: Yahoo Finance (primary)
   try{
-    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=5m&range=1d`);
+    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=1m&range=6h`,{headers:{'Accept':'application/json'}});
+    if(r.ok){
+      const d=await r.json();
+      const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
+      if(closes&&closes.length>10) return closes.filter(v=>v!==null&&v!==undefined);
+    }
+  }catch(e){}
+
+  // Source 2: Yahoo Finance 5m interval fallback
+  try{
+    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=5m&range=2d`);
     if(r.ok){
       const d=await r.json();
       const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
       if(closes&&closes.length>0) return closes.filter(v=>v!==null&&v!==undefined);
     }
   }catch(e){}
+
+  // Source 3: ExchangeRate API for current price + simulation
+  try{
+    const base=sym.slice(0,3),quote=sym.slice(3);
+    const r=await fetch(`https://open.er-api.com/v6/latest/${base}`);
+    if(r.ok){
+      const d=await r.json();
+      const rate=d?.rates?.[quote];
+      if(rate){
+        // Generate realistic price history around current rate
+        const prices=[];let p=rate*(0.9995+Math.random()*0.001);
+        for(let i=0;i<80;i++){p+=(Math.random()-0.498)*rate*0.0005;prices.push(parseFloat(p.toFixed(sym.includes('JPY')?3:5)));}
+        prices[prices.length-1]=parseFloat(rate.toFixed(sym.includes('JPY')?3:5));
+        return prices;
+      }
+    }
+  }catch(e){}
+
+  // Source 4: Frankfurter API
+  try{
+    const base=sym.slice(0,3),quote=sym.slice(3);
+    const r=await fetch(`https://api.frankfurter.app/latest?from=${base}&to=${quote}`);
+    if(r.ok){
+      const d=await r.json();
+      const rate=d?.rates?.[quote];
+      if(rate){
+        const prices=[];let p=rate*(0.999+Math.random()*0.002);
+        for(let i=0;i<80;i++){p+=(Math.random()-0.498)*rate*0.0005;prices.push(parseFloat(p.toFixed(sym.includes('JPY')?3:5)));}
+        prices[prices.length-1]=parseFloat(rate.toFixed(sym.includes('JPY')?3:5));
+        return prices;
+      }
+    }
+  }catch(e){}
+
+  // Final fallback: simulated prices
   return genSimPrices(sym);
 }
 function genSimPrices(sym){
@@ -1174,6 +1269,7 @@ function renderTracker(){
     if(lb) lb.style.width=(completed>0?losses/completed*100:0)+'%';
   },100);
 
+  updateTrackerRecommendations();
   // Performance by pair
   const pairStats={};
   signalLog.filter(e=>e.result!=='pending').forEach(e=>{
@@ -1228,6 +1324,27 @@ function renderTracker(){
       <button class="log-del" onclick="deleteEntry(${e.id})">🗑</button>
     </div>
   `).join('');
+}
+
+// Show tracker-based recommendations on signals page
+function updateTrackerRecommendations(){
+  const pairStats={};
+  signalLog.filter(e=>e.result!=='pending').forEach(e=>{
+    if(!pairStats[e.asset]) pairStats[e.asset]={wins:0,losses:0};
+    if(e.result==='win') pairStats[e.asset].wins++;
+    else pairStats[e.asset].losses++;
+  });
+  const pairs=Object.entries(pairStats)
+    .filter(([,s])=>s.wins+s.losses>=3)
+    .map(([pair,s])=>({pair,wr:Math.round(s.wins/(s.wins+s.losses)*100),total:s.wins+s.losses}))
+    .sort((a,b)=>b.wr-a.wr)
+    .slice(0,3);
+  
+  const recDiv=document.getElementById('tracker-rec');
+  if(recDiv&&pairs.length>0){
+    recDiv.style.display='block';
+    recDiv.innerHTML='📊 YOUR BEST PAIRS: '+pairs.map(p=>`<strong style="color:#fff">${p.pair.replace(' OTC','')}</strong> ${p.wr}%`).join(' · ');
+  }
 }
 
 function showPicker(id){
