@@ -326,7 +326,10 @@ header{text-align:center;padding:18px 0 14px;}
   <div class="live-price-row">
     <div>
       <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:700;color:#fff;" id="live-asset-lbl">EUR/USD</div>
-      <div id="platform-tag" style="font-size:9px;color:var(--accent);background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.15);border-radius:4px;padding:1px 6px;display:inline-block;margin-top:2px;">OTC</div>
+      <div style="display:flex;gap:5px;margin-top:3px;align-items:center;">
+        <div id="platform-tag" style="font-size:9px;color:var(--accent);background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.15);border-radius:4px;padding:1px 6px;">OTC</div>
+        <div id="data-source-tag" style="font-size:9px;color:var(--gold);background:rgba(255,215,64,0.08);border:1px solid rgba(255,215,64,0.15);border-radius:4px;padding:1px 6px;">Loading...</div>
+      </div>
     </div>
     <div style="text-align:right;">
       <div class="live-price" id="live-price">--</div>
@@ -397,7 +400,7 @@ header{text-align:center;padding:18px 0 14px;}
 
 <!-- Auto countdown -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;">⚡ AUTO SIGNAL</div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;">⚡ AUTO SIGNAL · <span style="color:var(--accent)">1 MIN REFRESH</span></div>
   <div class="countdown" id="auto-cd">Fetching...</div>
 </div>
 
@@ -514,7 +517,7 @@ let currentPlatform = 'iq';
 let priceHistory = {};
 let assetScores = {};
 let autoTimer = null;
-let cdCount = 300;
+let cdCount = 60;
 let signalLog = [];
 let dailyStats = {signals:0,wins:0,losses:0,profit:0,date:''};
 let pinAttempts = 0;
@@ -530,6 +533,40 @@ try {
 // ═══════════════════════════════
 // PASSWORD
 // ═══════════════════════════════
+// API usage tracker — Twelve Data free = 800 calls/day
+function trackAPIUsage(){
+  const today = new Date().toDateString();
+  let usage = {date:'', calls:0};
+  try{ usage = JSON.parse(localStorage.getItem('td_usage')||'{}'); }catch(e){}
+  if(usage.date !== today){ usage = {date:today, calls:0}; }
+
+  // Each fetchAllAndAnalyze = 8 assets x 1 call = 8 calls
+  // Each individual fetchPrice = 1 call
+  // We track and warn when approaching 750 calls
+  window.tdUsage = usage;
+
+  // Check remaining
+  const remaining = 800 - usage.calls;
+  if(remaining < 100){
+    const alertsDiv = document.getElementById('smart-alerts');
+    if(alertsDiv){
+      const warn = document.createElement('div');
+      warn.className = 'alert-box warn';
+      warn.innerHTML = `⚠️ <strong>API Limit Warning!</strong> ${remaining} Twelve Data calls remaining today. Bot will switch to Yahoo backup when limit is reached.`;
+      alertsDiv.prepend(warn);
+    }
+  }
+}
+
+function logAPICall(count=1){
+  const today = new Date().toDateString();
+  let usage = window.tdUsage || {date:today, calls:0};
+  if(usage.date !== today) usage = {date:today, calls:0};
+  usage.calls += count;
+  window.tdUsage = usage;
+  try{ localStorage.setItem('td_usage', JSON.stringify(usage)); }catch(e){}
+}
+
 function checkSession(){
   if(sessionStorage.getItem('ghostfx_ult')==='true'){
     document.getElementById('lock-screen').style.display='none';
@@ -576,6 +613,7 @@ function initApp(){
   updateDailyStats();
   updateTrackerRecommendations();
   checkNewsEvents();setInterval(checkNewsEvents,60000);
+  trackAPIUsage();
   fetchAllAndAnalyze();
 }
 
@@ -712,62 +750,73 @@ function checkNewsEvents(){
 // ═══════════════════════════════
 // PRICE FETCH
 // ═══════════════════════════════
+const TWELVE_DATA_KEY = '8cf735888f284b8ea0a18a04b1548bf7';
+
+// Track data source for display
+let lastDataSource = 'unknown';
+
+// Check if running from GitHub Pages (APIs work) or local file (APIs blocked)
+const isHosted = location.protocol === 'https:' || location.hostname === 'localhost';
+
 async function fetchPrice(sym){
-  // Source 1: Yahoo Finance (primary)
+  // Show warning if running locally
+  if(!isHosted){
+    lastDataSource = 'local';
+    console.warn('Running from local file — APIs blocked by CORS. Host on GitHub Pages for live data.');
+  }
+
+  // PRIMARY: Twelve Data 1-minute candles — most recent data possible
   try{
-    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=1m&range=6h`,{headers:{'Accept':'application/json'}});
+    const pair=sym.slice(0,3)+'/'+sym.slice(3);
+    const url=`https://api.twelvedata.com/time_series?symbol=${pair}&interval=1min&outputsize=80&apikey=${TWELVE_DATA_KEY}`;
+    const r=await fetch(url);
+    if(r.ok){
+      const d=await r.json();
+      if(d.values&&d.values.length>20){
+        const closes=d.values.reverse().map(v=>parseFloat(v.close)).filter(v=>!isNaN(v));
+        if(closes.length>20){
+          lastDataSource='twelvedata';
+          console.log('✅ Twelve Data 1min: fetched',closes.length,'candles for',sym,'— latest price:',closes[closes.length-1]);
+          return closes;
+        }
+      }
+      // Log if API returned error
+      if(d.code||d.message) console.log('Twelve Data error:',d.message||d.code);
+    }
+  }catch(e){console.log('Twelve Data error:',e.message);}
+
+  // EMERGENCY BACKUP ONLY: Yahoo Finance
+  // Only used if Twelve Data fails (API limit reached etc)
+  console.warn('⚠️ Twelve Data unavailable — using Yahoo Finance backup');
+  try{
+    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=1m&range=3h`);
     if(r.ok){
       const d=await r.json();
       const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
-      if(closes&&closes.length>10) return closes.filter(v=>v!==null&&v!==undefined);
-    }
-  }catch(e){}
-
-  // Source 2: Yahoo Finance 5m interval fallback
-  try{
-    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=5m&range=2d`);
-    if(r.ok){
-      const d=await r.json();
-      const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
-      if(closes&&closes.length>0) return closes.filter(v=>v!==null&&v!==undefined);
-    }
-  }catch(e){}
-
-  // Source 3: ExchangeRate API for current price + simulation
-  try{
-    const base=sym.slice(0,3),quote=sym.slice(3);
-    const r=await fetch(`https://open.er-api.com/v6/latest/${base}`);
-    if(r.ok){
-      const d=await r.json();
-      const rate=d?.rates?.[quote];
-      if(rate){
-        // Generate realistic price history around current rate
-        const prices=[];let p=rate*(0.9995+Math.random()*0.001);
-        for(let i=0;i<80;i++){p+=(Math.random()-0.498)*rate*0.0005;prices.push(parseFloat(p.toFixed(sym.includes('JPY')?3:5)));}
-        prices[prices.length-1]=parseFloat(rate.toFixed(sym.includes('JPY')?3:5));
-        return prices;
+      if(closes&&closes.length>20){
+        lastDataSource='yahoo';
+        return closes.filter(v=>v!==null&&v!==undefined);
       }
     }
   }catch(e){}
 
-  // Source 4: Frankfurter API
-  try{
-    const base=sym.slice(0,3),quote=sym.slice(3);
-    const r=await fetch(`https://api.frankfurter.app/latest?from=${base}&to=${quote}`);
-    if(r.ok){
-      const d=await r.json();
-      const rate=d?.rates?.[quote];
-      if(rate){
-        const prices=[];let p=rate*(0.999+Math.random()*0.002);
-        for(let i=0;i<80;i++){p+=(Math.random()-0.498)*rate*0.0005;prices.push(parseFloat(p.toFixed(sym.includes('JPY')?3:5)));}
-        prices[prices.length-1]=parseFloat(rate.toFixed(sym.includes('JPY')?3:5));
-        return prices;
-      }
-    }
-  }catch(e){}
-
-  // Final fallback: simulated prices
+  // LAST RESORT: simulated prices
+  console.warn('❌ All APIs failed — using simulated prices');
+  lastDataSource='simulated';
   return genSimPrices(sym);
+}
+
+// Fetch single live price for quick display update
+async function fetchLivePrice(sym){
+  try{
+    const pair=sym.slice(0,3)+'/'+sym.slice(3);
+    const r=await fetch(`https://api.twelvedata.com/price?symbol=${pair}&apikey=${TWELVE_DATA_KEY}`);
+    if(r.ok){
+      const d=await r.json();
+      if(d.price) return parseFloat(d.price);
+    }
+  }catch(e){}
+  return null;
 }
 function genSimPrices(sym){
   const bases={EURUSD:1.085,GBPUSD:1.265,EURJPY:162.5,USDJPY:149.8,AUDUSD:0.652,USDCAD:1.358,GBPJPY:189.5,EURGBP:0.858};
@@ -943,7 +992,7 @@ async function fetchAndAnalyze(sym){
   }catch(e){return null;}
 }
 
-function updateIndicatorDisplay(prices){
+function updateIndicatorDisplay(prices, source){
   const dec=currentSym.includes('JPY')?3:5;
   const cur=prices[prices.length-1],prev=prices[prices.length-2]||cur;
   const chg=((cur-prev)/prev*100);
@@ -951,6 +1000,31 @@ function updateIndicatorDisplay(prices){
   const ce=document.getElementById('price-chg');
   ce.textContent=(chg>=0?'+':'')+chg.toFixed(4)+'%';
   ce.className='price-chg '+(chg>=0?'up':'down');
+  // Show data source based on lastDataSource global
+  const ds=document.getElementById('data-source-tag');
+  if(ds){
+    if(lastDataSource==='twelvedata'){
+      ds.textContent='12DATA 1MIN ✅';
+      ds.style.color='var(--accent)';
+      ds.style.background='rgba(0,255,136,0.08)';
+      ds.style.borderColor='rgba(0,255,136,0.2)';
+    } else if(lastDataSource==='yahoo'){
+      ds.textContent='YAHOO BACKUP ⚠️';
+      ds.style.color='var(--gold)';
+      ds.style.background='rgba(255,215,64,0.08)';
+      ds.style.borderColor='rgba(255,215,64,0.2)';
+    } else if(lastDataSource==='local'){
+      ds.textContent='HOST ON GITHUB ⚠️';
+      ds.style.color='var(--gold)';
+      ds.style.background='rgba(255,215,64,0.08)';
+      ds.style.borderColor='rgba(255,215,64,0.2)';
+    } else {
+      ds.textContent='SIMULATED ❌';
+      ds.style.color='var(--red)';
+      ds.style.background='rgba(255,51,85,0.06)';
+      ds.style.borderColor='rgba(255,51,85,0.15)';
+    }
+  }
 
   const ma20=calcMA(prices,20),ma50=calcMA(prices,50);
   const rsi=calcRSI(prices,14),macd=calcMACD(prices),stoch=calcStochastic(prices,14);
@@ -1014,6 +1088,11 @@ async function generateSignal(silent=false){
 
   // Smart alerts
   const alerts=[];
+
+  // Warn if not hosted
+  if(!isHosted){
+    alerts.push({type:'warn', msg:'⚠️ <strong>Upload to GitHub Pages</strong> for live Twelve Data prices. Currently using simulated data.'});
+  }
   const h=getWAT().getHours();
   if(h>=10&&h<14) alerts.push({type:'warn',msg:'⚠️ <strong>Slow zone!</strong> 10am-2pm WAT — OTC choppy. Best: 7-10am or 2-6pm.'});
   if(h<7||h>=21) alerts.push({type:'danger',msg:'🌙 <strong>Avoid trading!</strong> Very unpredictable at this hour.'});
@@ -1174,12 +1253,12 @@ function copyTG(){
 // ═══════════════════════════════
 function startCountdown(){
   if(autoTimer) clearInterval(autoTimer);
-  cdCount=300;
+  cdCount=60; // 1 minute — matches 1-min data freshness
   autoTimer=setInterval(()=>{
     cdCount--;
-    const m=Math.floor(cdCount/60),s=String(cdCount%60).padStart(2,'0');
+    const s=String(cdCount).padStart(2,'0');
     const el=document.getElementById('auto-cd');
-    if(el) el.textContent=`⏱ Next scan: ${m}:${s}`;
+    if(el) el.textContent='⏱ Next scan: 0:'+s;
     if(cdCount<=0){clearInterval(autoTimer);fetchAllAndAnalyze();}
   },1000);
 }
