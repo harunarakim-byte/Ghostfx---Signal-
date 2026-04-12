@@ -295,7 +295,10 @@ header{text-align:center;padding:18px 0 14px;}
 <!-- WAT Clock -->
 <div class="wat-bar">
   <div><div class="wat-lbl">🇳🇬 NIGERIA TIME</div><div class="wat-time" id="wat-time">--:--:--</div></div>
-  <div class="wat-s" id="wat-status">--</div>
+  <div style="text-align:right;">
+    <div class="wat-s" id="wat-status">--</div>
+    <div id="ws-status" style="font-size:9px;color:var(--muted);font-family:Share Tech Mono,monospace;letter-spacing:1px;margin-top:3px;">WebSocket: Connecting...</div>
+  </div>
 </div>
 
 <!-- News Bar -->
@@ -614,6 +617,7 @@ function initApp(){
   updateTrackerRecommendations();
   checkNewsEvents();setInterval(checkNewsEvents,60000);
   trackAPIUsage();
+  initWebSockets(); // Start Polygon WebSocket connections
   fetchAllAndAnalyze();
 }
 
@@ -750,73 +754,162 @@ function checkNewsEvents(){
 // ═══════════════════════════════
 // PRICE FETCH
 // ═══════════════════════════════
-const TWELVE_DATA_KEY = '8cf735888f284b8ea0a18a04b1548bf7';
+// ═══════════════════════════════════════
+// FINNHUB WEBSOCKET — REAL-TIME LIVE DATA
+// ═══════════════════════════════════════
+const FINNHUB_KEY = 'd7dl4uhr01qggoeoo8pgd7dl4uhr01qggoeoo8q0';
 
-// Track data source for display
 let lastDataSource = 'unknown';
-
-// Check if running from GitHub Pages (APIs work) or local file (APIs blocked)
 const isHosted = location.protocol === 'https:' || location.hostname === 'localhost';
 
-async function fetchPrice(sym){
-  // Show warning if running locally
-  if(!isHosted){
-    lastDataSource = 'local';
-    console.warn('Running from local file — APIs blocked by CORS. Host on GitHub Pages for live data.');
+// Price buffers — stores real-time ticks per symbol
+const priceBuffers = {};
+let finnhubWS = null;
+let wsReady = false;
+let wsSubscribed = [];
+
+// Finnhub forex symbols
+const FINNHUB_SYMBOLS = {
+  'EURUSD': 'OANDA:EUR_USD',
+  'GBPUSD': 'OANDA:GBP_USD',
+  'EURJPY': 'OANDA:EUR_JPY',
+  'USDJPY': 'OANDA:USD_JPY',
+  'AUDUSD': 'OANDA:AUD_USD',
+  'USDCAD': 'OANDA:USD_CAD',
+  'GBPJPY': 'OANDA:GBP_JPY',
+  'EURGBP': 'OANDA:EUR_GBP'
+};
+
+// Single Finnhub WebSocket connection for all pairs
+function initWebSockets() {
+  if (!isHosted) {
+    console.warn('Running locally — WebSocket needs GitHub Pages hosting');
+    return;
   }
-
-  // PRIMARY: Twelve Data 1-minute candles — most recent data possible
-  try{
-    const pair=sym.slice(0,3)+'/'+sym.slice(3);
-    const url=`https://api.twelvedata.com/time_series?symbol=${pair}&interval=1min&outputsize=80&apikey=${TWELVE_DATA_KEY}`;
-    const r=await fetch(url);
-    if(r.ok){
-      const d=await r.json();
-      if(d.values&&d.values.length>20){
-        const closes=d.values.reverse().map(v=>parseFloat(v.close)).filter(v=>!isNaN(v));
-        if(closes.length>20){
-          lastDataSource='twelvedata';
-          console.log('✅ Twelve Data 1min: fetched',closes.length,'candles for',sym,'— latest price:',closes[closes.length-1]);
-          return closes;
-        }
-      }
-      // Log if API returned error
-      if(d.code||d.message) console.log('Twelve Data error:',d.message||d.code);
-    }
-  }catch(e){console.log('Twelve Data error:',e.message);}
-
-  // EMERGENCY BACKUP ONLY: Yahoo Finance
-  // Only used if Twelve Data fails (API limit reached etc)
-  console.warn('⚠️ Twelve Data unavailable — using Yahoo Finance backup');
-  try{
-    const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}=X?interval=1m&range=3h`);
-    if(r.ok){
-      const d=await r.json();
-      const closes=d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
-      if(closes&&closes.length>20){
-        lastDataSource='yahoo';
-        return closes.filter(v=>v!==null&&v!==undefined);
-      }
-    }
-  }catch(e){}
-
-  // LAST RESORT: simulated prices
-  console.warn('❌ All APIs failed — using simulated prices');
-  lastDataSource='simulated';
-  return genSimPrices(sym);
+  connectFinnhubWS();
 }
 
-// Fetch single live price for quick display update
-async function fetchLivePrice(sym){
-  try{
-    const pair=sym.slice(0,3)+'/'+sym.slice(3);
-    const r=await fetch(`https://api.twelvedata.com/price?symbol=${pair}&apikey=${TWELVE_DATA_KEY}`);
-    if(r.ok){
-      const d=await r.json();
-      if(d.price) return parseFloat(d.price);
+function connectFinnhubWS() {
+  try {
+    finnhubWS = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_KEY}`);
+
+    finnhubWS.onopen = () => {
+      console.log('✅ Finnhub WebSocket connected');
+      const wsEl = document.getElementById('ws-status');
+      if (wsEl) { wsEl.textContent = '🟢 FINNHUB LIVE'; wsEl.style.color = 'var(--accent)'; }
+      // Subscribe to all pairs
+      ASSETS.forEach(a => {
+        const sym = FINNHUB_SYMBOLS[a.sym];
+        if (sym) {
+          finnhubWS.send(JSON.stringify({type:'subscribe', symbol: sym}));
+          wsSubscribed.push(sym);
+        }
+      });
+      wsReady = true;
+      lastDataSource = 'finnhub';
+    };
+
+    finnhubWS.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'trade' && msg.data) {
+        msg.data.forEach(tick => {
+          // Find which symbol this is
+          const entry = Object.entries(FINNHUB_SYMBOLS).find(([k,v]) => v === tick.s);
+          if (!entry) return;
+          const sym = entry[0];
+          const price = parseFloat(tick.p);
+          if (isNaN(price)) return;
+
+          // Add to buffer
+          if (!priceBuffers[sym]) priceBuffers[sym] = [];
+          priceBuffers[sym].push(price);
+          if (priceBuffers[sym].length > 120) priceBuffers[sym].shift();
+
+          // Update display if this is the current pair
+          if (sym === currentSym) updateLivePriceTick(sym, price);
+
+          lastDataSource = 'finnhub';
+        });
+      }
+      if (msg.type === 'error') {
+        console.log('Finnhub error:', msg.msg);
+        const wsEl = document.getElementById('ws-status');
+        if (wsEl) { wsEl.textContent = '❌ WS Error: ' + msg.msg; wsEl.style.color = 'var(--red)'; }
+      }
+    };
+
+    finnhubWS.onerror = (e) => {
+      console.log('Finnhub WS error:', e);
+      lastDataSource = 'error';
+      const wsEl = document.getElementById('ws-status');
+      if (wsEl) { wsEl.textContent = '❌ Connection Error'; wsEl.style.color = 'var(--red)'; }
+    };
+
+    finnhubWS.onclose = () => {
+      wsReady = false;
+      console.log('Finnhub WS closed — reconnecting in 3s...');
+      const wsEl = document.getElementById('ws-status');
+      if (wsEl) { wsEl.textContent = '🔄 Reconnecting...'; wsEl.style.color = 'var(--gold)'; }
+      setTimeout(connectFinnhubWS, 3000);
+    };
+
+  } catch(e) {
+    console.log('WebSocket init error:', e.message);
+  }
+}
+
+// Update price display in real-time
+function updateLivePriceTick(sym, price) {
+  const dec = sym.includes('JPY') ? 3 : 5;
+  const priceEl = document.getElementById('live-price');
+  const prevPrice = parseFloat(priceEl?.textContent) || price;
+  if (priceEl) {
+    priceEl.textContent = price.toFixed(dec);
+    priceEl.style.color = price > prevPrice ? 'var(--accent)' : price < prevPrice ? 'var(--red)' : 'var(--accent)';
+    setTimeout(() => { if(priceEl) priceEl.style.color = 'var(--accent)'; }, 500);
+  }
+  // Update data source tag
+  const ds = document.getElementById('data-source-tag');
+  if (ds) {
+    ds.textContent = '🔴 FINNHUB LIVE ✅';
+    ds.style.color = 'var(--accent)';
+    ds.style.background = 'rgba(0,255,136,0.08)';
+    ds.style.borderColor = 'rgba(0,255,136,0.2)';
+  }
+}
+
+// Fetch prices — WebSocket buffer first, then Finnhub REST
+async function fetchPrice(sym) {
+  // PRIMARY: Finnhub WebSocket live buffer
+  if (priceBuffers[sym] && priceBuffers[sym].length >= 30) {
+    lastDataSource = 'finnhub';
+    console.log('✅ Finnhub live buffer:', priceBuffers[sym].length, 'ticks for', sym);
+    return [...priceBuffers[sym]];
+  }
+
+  // SECONDARY: Finnhub REST API (1-min candles)
+  try {
+    const fSym = FINNHUB_SYMBOLS[sym];
+    if (fSym) {
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - (90 * 60); // last 90 minutes
+      const url = `https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
+      const r = await fetch(url);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.s === 'ok' && d.c && d.c.length > 20) {
+          lastDataSource = 'finnhub_rest';
+          console.log('✅ Finnhub REST:', d.c.length, 'candles for', sym);
+          return d.c.map(v => parseFloat(v)).filter(v => !isNaN(v));
+        }
+      }
     }
-  }catch(e){}
-  return null;
+  } catch(e) { console.log('Finnhub REST error:', e.message); }
+
+  // FALLBACK: Simulated only if Finnhub completely fails
+  console.warn('Finnhub unavailable — using simulated prices');
+  lastDataSource = 'simulated';
+  return genSimPrices(sym);
 }
 function genSimPrices(sym){
   const bases={EURUSD:1.085,GBPUSD:1.265,EURJPY:162.5,USDJPY:149.8,AUDUSD:0.652,USDCAD:1.358,GBPJPY:189.5,EURGBP:0.858};
@@ -1000,24 +1093,24 @@ function updateIndicatorDisplay(prices, source){
   const ce=document.getElementById('price-chg');
   ce.textContent=(chg>=0?'+':'')+chg.toFixed(4)+'%';
   ce.className='price-chg '+(chg>=0?'up':'down');
-  // Show data source based on lastDataSource global
+  // Show data source
   const ds=document.getElementById('data-source-tag');
   if(ds){
-    if(lastDataSource==='twelvedata'){
-      ds.textContent='12DATA 1MIN ✅';
+    if(lastDataSource==='finnhub'){
+      ds.textContent='🔴 FINNHUB LIVE ✅';
       ds.style.color='var(--accent)';
       ds.style.background='rgba(0,255,136,0.08)';
       ds.style.borderColor='rgba(0,255,136,0.2)';
-    } else if(lastDataSource==='yahoo'){
-      ds.textContent='YAHOO BACKUP ⚠️';
-      ds.style.color='var(--gold)';
-      ds.style.background='rgba(255,215,64,0.08)';
-      ds.style.borderColor='rgba(255,215,64,0.2)';
-    } else if(lastDataSource==='local'){
-      ds.textContent='HOST ON GITHUB ⚠️';
-      ds.style.color='var(--gold)';
-      ds.style.background='rgba(255,215,64,0.08)';
-      ds.style.borderColor='rgba(255,215,64,0.2)';
+    } else if(lastDataSource==='finnhub_rest'){
+      ds.textContent='FINNHUB 1MIN ✅';
+      ds.style.color='var(--accent)';
+      ds.style.background='rgba(0,255,136,0.08)';
+      ds.style.borderColor='rgba(0,255,136,0.2)';
+    } else if(lastDataSource==='error'){
+      ds.textContent='CHECK API KEY ❌';
+      ds.style.color='var(--red)';
+      ds.style.background='rgba(255,51,85,0.06)';
+      ds.style.borderColor='rgba(255,51,85,0.15)';
     } else {
       ds.textContent='SIMULATED ❌';
       ds.style.color='var(--red)';
