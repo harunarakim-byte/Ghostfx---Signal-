@@ -1141,13 +1141,8 @@ function updateIndicatorDisplay(prices, source){
   // Show data source
   const ds=document.getElementById('data-source-tag');
   if(ds){
-    if(lastDataSource==='finnhub'){
-      ds.textContent='🔴 FINNHUB LIVE ✅';
-      ds.style.color='var(--accent)';
-      ds.style.background='rgba(0,255,136,0.08)';
-      ds.style.borderColor='rgba(0,255,136,0.2)';
-    } else if(lastDataSource==='finnhub_rest'){
-      ds.textContent='FINNHUB 1MIN ✅';
+    if(lastDataSource==='finnhub_rest'){
+      ds.textContent='🟢 FINNHUB LIVE ✅';
       ds.style.color='var(--accent)';
       ds.style.background='rgba(0,255,136,0.08)';
       ds.style.borderColor='rgba(0,255,136,0.2)';
