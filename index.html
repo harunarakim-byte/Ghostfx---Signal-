@@ -791,16 +791,16 @@ function initWebSockets() {
   connectFinnhubWS();
 }
 
-// Pre-fill price buffers immediately using Finnhub REST
-// This gives instant real data while WebSocket ticks accumulate
+// Pre-fill ALL pairs simultaneously — no waiting
 async function prefillBuffers() {
-  console.log('Pre-filling price buffers from Finnhub REST...');
+  console.log('Pre-filling all buffers simultaneously...');
   const to = Math.floor(Date.now() / 1000);
-  const from = to - (90 * 60); // last 90 minutes
+  const from = to - (60 * 60); // last 60 minutes only — faster
 
-  for (const a of ASSETS) {
+  // Fetch all 8 pairs at the same time
+  const fetches = ASSETS.map(async (a) => {
     const fSym = FINNHUB_SYMBOLS[a.sym];
-    if (!fSym) continue;
+    if (!fSym) return;
     try {
       const url = `https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
       const r = await fetch(url);
@@ -808,25 +808,24 @@ async function prefillBuffers() {
         const d = await r.json();
         if (d.s === 'ok' && d.c && d.c.length > 5) {
           const closes = d.c.map(v => parseFloat(v)).filter(v => !isNaN(v));
-          // Merge with existing buffer — WebSocket ticks take priority
-          if (!priceBuffers[a.sym] || priceBuffers[a.sym].length < closes.length) {
-            priceBuffers[a.sym] = closes;
-          }
-          lastDataSource = 'finnhub_rest';
-          console.log('✅ Pre-filled', a.sym, 'with', closes.length, 'candles');
-          // Update display for current pair
+          priceBuffers[a.sym] = closes;
           if (a.sym === currentSym) {
+            lastDataSource = 'finnhub_rest';
             updateIndicatorDisplay(closes, 'finnhub_rest');
           }
+          console.log('✅', a.sym, closes.length, 'candles');
         }
       }
-    } catch(e) {
-      console.log('Pre-fill error for', a.sym, ':', e.message);
-    }
-    // Small delay between requests to respect rate limits
-    await new Promise(res => setTimeout(res, 200));
+    } catch(e) {}
+  });
+
+  // Wait for ALL to complete together
+  await Promise.all(fetches);
+  console.log('✅ All buffers ready');
+  // Trigger analysis immediately with fresh data
+  if (priceBuffers[currentSym] && priceBuffers[currentSym].length > 10) {
+    generateSignal(true);
   }
-  console.log('✅ Buffer pre-fill complete');
 }
 
 function connectFinnhubWS() {
@@ -914,17 +913,17 @@ function updateLivePriceTick(sym, price) {
   const ds = document.getElementById('data-source-tag');
   if (ds) {
     const bufSize = priceBuffers[sym] ? priceBuffers[sym].length : 0;
-    ds.textContent = bufSize >= 10 ? '🔴 FINNHUB LIVE ✅' : `⏳ BUFFERING ${bufSize}/10`;
-    ds.style.color = bufSize >= 10 ? 'var(--accent)' : 'var(--gold)';
-    ds.style.background = bufSize >= 10 ? 'rgba(0,255,136,0.08)' : 'rgba(255,215,64,0.08)';
-    ds.style.borderColor = bufSize >= 10 ? 'rgba(0,255,136,0.2)' : 'rgba(255,215,64,0.2)';
+    ds.textContent = bufSize >= 5 ? '🔴 FINNHUB LIVE ✅' : `⏳ BUFFERING ${bufSize}/5`;
+    ds.style.color = bufSize >= 5 ? 'var(--accent)' : 'var(--gold)';
+    ds.style.background = bufSize >= 5 ? 'rgba(0,255,136,0.08)' : 'rgba(255,215,64,0.08)';
+    ds.style.borderColor = bufSize >= 5 ? 'rgba(0,255,136,0.2)' : 'rgba(255,215,64,0.2)';
   }
 }
 
 // Fetch prices — WebSocket buffer first, then Finnhub REST
 async function fetchPrice(sym) {
-  // PRIMARY: Finnhub WebSocket live buffer (needs only 10 ticks now)
-  if (priceBuffers[sym] && priceBuffers[sym].length >= 10) {
+  // PRIMARY: Finnhub WebSocket live buffer (needs only 5 ticks)
+  if (priceBuffers[sym] && priceBuffers[sym].length >= 5) {
     lastDataSource = 'finnhub';
     console.log('✅ Finnhub live buffer:', priceBuffers[sym].length, 'ticks for', sym);
     return [...priceBuffers[sym]];
@@ -1118,7 +1117,10 @@ function confluenceAnalysis(prices){
 async function fetchAndAnalyze(sym){
   sym=sym||currentSym;
   try{
-    const prices=await fetchPrice(sym);
+    // Use buffer if available, otherwise fetch
+    let prices = priceBuffers[sym] && priceBuffers[sym].length >= 5
+      ? [...priceBuffers[sym]]
+      : await fetchPrice(sym);
     priceHistory[sym]=prices;
     if(sym===currentSym) updateIndicatorDisplay(prices);
     const result=confluenceAnalysis.call({currentSym:sym,currentOTC:currentOTC},prices);
