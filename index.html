@@ -660,6 +660,20 @@ function selectAsset(sym,otc,label,el){
   el.classList.add('active');
   currentSym=sym;currentOTC=otc;
   document.getElementById('live-asset-lbl').textContent=label;
+  // Clear cached buffer for this pair to force fresh fetch
+  delete priceBuffers[sym];
+  // Reset indicator display
+  ['i-ma20','i-ma50','i-rsi','i-macd','i-stoch'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.textContent='--';el.className='ind-val';}
+  });
+  ['s-ma20','s-ma50','s-rsi','s-macd','s-stoch'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.textContent='--';
+  });
+  document.getElementById('live-price').textContent='--';
+  document.getElementById('price-chg').textContent='--';
+  // Fetch fresh data for this specific pair
   fetchAndAnalyze(sym);
 }
 
@@ -1117,17 +1131,17 @@ function confluenceAnalysis(prices){
 async function fetchAndAnalyze(sym){
   sym=sym||currentSym;
   try{
-    // Use buffer if available, otherwise fetch
-    let prices = priceBuffers[sym] && priceBuffers[sym].length >= 5
-      ? [...priceBuffers[sym]]
-      : await fetchPrice(sym);
-    priceHistory[sym]=prices;
+    // Always fetch fresh — never use wrong cached data
+    let prices = await fetchPrice(sym);
+    if (!prices || prices.length < 5) return null;
+    priceBuffers[sym] = prices; // Cache fresh data
+    priceHistory[sym] = prices;
     if(sym===currentSym) updateIndicatorDisplay(prices);
     const result=confluenceAnalysis.call({currentSym:sym,currentOTC:currentOTC},prices);
     assetScores[sym]=result.confluencePct;
     updateAssetStrength(sym,result.confluencePct);
     return result;
-  }catch(e){return null;}
+  }catch(e){console.log('fetchAndAnalyze error:',e);return null;}
 }
 
 function updateIndicatorDisplay(prices, source){
@@ -1180,18 +1194,48 @@ function updateAssetStrength(sym,score){
 // ═══════════════════════════════
 async function fetchAllAndAnalyze(){
   document.getElementById('auto-cd').innerHTML='<span class="spinner"></span> Scanning all pairs...';
-  const promises=ASSETS.map(a=>fetchPrice(a.sym).then(prices=>{priceHistory[a.sym]=prices;const r=analyzeForScore(prices,a.sym);assetScores[a.sym]=r;updateAssetStrength(a.sym,r);return{sym:a.sym,score:r,otc:a.otc};}));
-  const results=await Promise.all(promises);
-  // Best pair
-  const best=results.sort((a,b)=>b.score-a.score)[0];
-  const bestAsset=ASSETS.find(a=>a.sym===best.sym);
-  document.getElementById('best-pair').textContent=bestAsset?.otc||best.otc;
-  document.getElementById('best-score').textContent=best.score+'%';
 
-  // Update current pair indicators
-  if(priceHistory[currentSym]) updateIndicatorDisplay(priceHistory[currentSym]);
+  // Fetch all pairs simultaneously
+  const promises = ASSETS.map(async a => {
+    const prices = await fetchPrice(a.sym);
+    if (!prices || prices.length < 5) return {sym:a.sym,score:0,otc:a.otc};
+    priceBuffers[a.sym] = prices;
+    priceHistory[a.sym] = prices;
+    const score = analyzeForScore(prices, a.sym);
+    assetScores[a.sym] = score;
+    updateAssetStrength(a.sym, score);
+    return {sym:a.sym, score, otc:a.otc, prices};
+  });
 
-  // Run full analysis on current pair
+  const results = await Promise.all(promises);
+
+  // Find best pair by score
+  const sorted = results.filter(r=>r.score>0).sort((a,b)=>b.score-a.score);
+  const best = sorted[0];
+
+  if (best) {
+    // Auto-select the best pair
+    const bestAsset = ASSETS.find(a=>a.sym===best.sym);
+    document.getElementById('best-pair').textContent = bestAsset?.otc || best.otc;
+    document.getElementById('best-score').textContent = best.score+'%';
+
+    // Auto-switch to best pair chip
+    document.querySelectorAll('.asset-chip').forEach(c=>{
+      c.classList.toggle('active', c.dataset.sym === best.sym);
+    });
+
+    // Update state to best pair
+    currentSym = best.sym;
+    currentOTC = best.otc || (bestAsset?.otc || best.sym);
+    document.getElementById('live-asset-lbl').textContent = bestAsset?.label || best.sym;
+
+    // Update indicators with best pair data
+    if (priceBuffers[best.sym]) {
+      updateIndicatorDisplay(priceBuffers[best.sym]);
+    }
+  }
+
+  // Generate signal automatically for best pair
   await generateSignal(true);
   startCountdown();
 }
