@@ -784,9 +784,49 @@ const FINNHUB_SYMBOLS = {
 function initWebSockets() {
   if (!isHosted) {
     console.warn('Running locally — WebSocket needs GitHub Pages hosting');
+    // Still try REST even when local
+    prefillBuffers();
     return;
   }
   connectFinnhubWS();
+}
+
+// Pre-fill price buffers immediately using Finnhub REST
+// This gives instant real data while WebSocket ticks accumulate
+async function prefillBuffers() {
+  console.log('Pre-filling price buffers from Finnhub REST...');
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - (90 * 60); // last 90 minutes
+
+  for (const a of ASSETS) {
+    const fSym = FINNHUB_SYMBOLS[a.sym];
+    if (!fSym) continue;
+    try {
+      const url = `https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
+      const r = await fetch(url);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.s === 'ok' && d.c && d.c.length > 5) {
+          const closes = d.c.map(v => parseFloat(v)).filter(v => !isNaN(v));
+          // Merge with existing buffer — WebSocket ticks take priority
+          if (!priceBuffers[a.sym] || priceBuffers[a.sym].length < closes.length) {
+            priceBuffers[a.sym] = closes;
+          }
+          lastDataSource = 'finnhub_rest';
+          console.log('✅ Pre-filled', a.sym, 'with', closes.length, 'candles');
+          // Update display for current pair
+          if (a.sym === currentSym) {
+            updateIndicatorDisplay(closes, 'finnhub_rest');
+          }
+        }
+      }
+    } catch(e) {
+      console.log('Pre-fill error for', a.sym, ':', e.message);
+    }
+    // Small delay between requests to respect rate limits
+    await new Promise(res => setTimeout(res, 200));
+  }
+  console.log('✅ Buffer pre-fill complete');
 }
 
 function connectFinnhubWS() {
@@ -807,6 +847,8 @@ function connectFinnhubWS() {
       });
       wsReady = true;
       lastDataSource = 'finnhub';
+      // Immediately pre-fill buffers with REST data while WebSocket ticks accumulate
+      prefillBuffers();
     };
 
     finnhubWS.onmessage = (event) => {
@@ -868,20 +910,21 @@ function updateLivePriceTick(sym, price) {
     priceEl.style.color = price > prevPrice ? 'var(--accent)' : price < prevPrice ? 'var(--red)' : 'var(--accent)';
     setTimeout(() => { if(priceEl) priceEl.style.color = 'var(--accent)'; }, 500);
   }
-  // Update data source tag
+  // Update data source tag with buffer size
   const ds = document.getElementById('data-source-tag');
   if (ds) {
-    ds.textContent = '🔴 FINNHUB LIVE ✅';
-    ds.style.color = 'var(--accent)';
-    ds.style.background = 'rgba(0,255,136,0.08)';
-    ds.style.borderColor = 'rgba(0,255,136,0.2)';
+    const bufSize = priceBuffers[sym] ? priceBuffers[sym].length : 0;
+    ds.textContent = bufSize >= 10 ? '🔴 FINNHUB LIVE ✅' : `⏳ BUFFERING ${bufSize}/10`;
+    ds.style.color = bufSize >= 10 ? 'var(--accent)' : 'var(--gold)';
+    ds.style.background = bufSize >= 10 ? 'rgba(0,255,136,0.08)' : 'rgba(255,215,64,0.08)';
+    ds.style.borderColor = bufSize >= 10 ? 'rgba(0,255,136,0.2)' : 'rgba(255,215,64,0.2)';
   }
 }
 
 // Fetch prices — WebSocket buffer first, then Finnhub REST
 async function fetchPrice(sym) {
-  // PRIMARY: Finnhub WebSocket live buffer
-  if (priceBuffers[sym] && priceBuffers[sym].length >= 30) {
+  // PRIMARY: Finnhub WebSocket live buffer (needs only 10 ticks now)
+  if (priceBuffers[sym] && priceBuffers[sym].length >= 10) {
     lastDataSource = 'finnhub';
     console.log('✅ Finnhub live buffer:', priceBuffers[sym].length, 'ticks for', sym);
     return [...priceBuffers[sym]];
