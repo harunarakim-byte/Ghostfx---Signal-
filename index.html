@@ -1095,10 +1095,11 @@ function confluenceAnalysis(prices){
 
   // Strength label
   let strength,strengthClass;
-  if(confluencePct>=80){strength='VERY STRONG 🔥';strengthClass='very-strong';}
-  else if(confluencePct>=65){strength='STRONG ✅';strengthClass='strong';}
-  else if(confluencePct>=55){strength='MODERATE ⚡';strengthClass='moderate';}
-  else{strength='WEAK ⚠️';strengthClass='weak';}
+  const dominantV = isCall ? bullVotes : bearVotes;
+  if(dominantV>=9){strength='VERY STRONG 🔥';strengthClass='very-strong';}
+  else if(dominantV>=8){strength='STRONG ✅';strengthClass='strong';}
+  else if(dominantV>=7){strength='MODERATE ⚡';strengthClass='moderate';}
+  else{strength='WEAK ⚠️ — SKIP';strengthClass='weak';}
 
   // Trend
   let trend='SIDE';
@@ -1118,10 +1119,30 @@ function confluenceAnalysis(prices){
     ?`${currentOTC} showing strong bullish confluence. ${bullVotes} out of ${total} indicators confirm CALL direction. ${ma20&&ma50?'Price above both MA20 and MA50.':''} ${rsi?'RSI at '+rsi.toFixed(1)+' — '+rsiState+'.':''} ${macd?'MACD positive.':''}`
     :`${currentOTC} showing strong bearish confluence. ${bearVotes} out of ${total} indicators confirm PUT direction. ${ma20&&ma50?'Price below MA20 and MA50.':''} ${rsi?'RSI at '+rsi.toFixed(1)+' — '+rsiState+'.':''} ${macd?'MACD negative.':''}`;
 
+  // Trend strength filter — check last 3 candles moving same direction
+  let trendConfirmed = false;
+  if(prices.length >= 4){
+    const last3 = prices.slice(-4);
+    const allUp = last3[1]>last3[0] && last3[2]>last3[1] && last3[3]>last3[2];
+    const allDown = last3[1]<last3[0] && last3[2]<last3[1] && last3[3]<last3[2];
+    if(isCall && allUp) trendConfirmed = true;
+    if(!isCall && allDown) trendConfirmed = true;
+    if(trendConfirmed) confidence = Math.min(confidence + 3, 95);
+  }
+
+  // Candle body size filter — check last candle is not a doji
+  const lastCandle = prices[prices.length-1];
+  const prevCandle = prices[prices.length-2] || lastCandle;
+  const bodySize = Math.abs(lastCandle - prevCandle);
+  const avgMove = prices.slice(-10).reduce((acc,p,i,arr)=>i===0?0:acc+Math.abs(p-arr[i-1]),0)/9;
+  const isStrongCandle = bodySize >= avgMove * 0.5;
+  if(!isStrongCandle && confidence > 75) confidence -= 5;
+
   return {
     direction,confidence,strength,strengthClass,trend,rsiState,risk,
     reasons,analysis,signals,bullVotes,bearVotes,total,confluencePct,
-    pattern,ma20,ma50,rsi,macd,stoch,boll,ema9,cur,dec
+    pattern,ma20,ma50,rsi,macd,stoch,boll,ema9,cur,dec,
+    isValidSignal,trendConfirmed,isStrongCandle
   };
 }
 
@@ -1354,25 +1375,32 @@ function renderSignalOutput(result){
   const platformLabel=currentPlatform==='iq'?'IQ Option':'Pocket Option';
   const emoji=isCall?'🟢':'🔴';
 
+  // Build clean professional Telegram message
+  const indLine = result.signals
+    .filter(s=>s.dir===(isCall?'bull':'bear'))
+    .slice(0,5)
+    .map(s=>`✅ ${s.name}`)
+    .join('\n');
+  const dominantVotes = isCall ? result.bullVotes : result.bearVotes;
+
   const tgMsg=`${emoji} *SIGNAL ALERT* ${emoji}
 ━━━━━━━━━━━━━━━━
-🎯 Asset: *${currentOTC}*
-📱 Platform: *${platformLabel}*
+🎯 *${currentOTC}*
+📱 *${platformLabel}*
 ⚡ Direction: *${result.direction} ${isCall?'↑':'↓'}*
 ⏱ Expiry: *${currentExpiry}*
-🕐 Time: *${timeStr}*
+🕐 *${timeStr}*
 ━━━━━━━━━━━━━━━━
 💡 Confidence: *${result.confidence}%*
 💪 Strength: *${result.strength}*
+📊 Indicators: *${dominantVotes}/9 confirmed*
 ⚠️ Risk: *${result.risk}*
-📊 Trend: *${result.trend}*
 ━━━━━━━━━━━━━━━━
-📈 Indicators (${result.bullVotes}🟢 vs ${result.bearVotes}🔴):
-${result.signals.slice(0,5).map(s=>`${s.dir==='bull'?'✅':s.dir==='bear'?'❌':'➡️'} ${s.name}`).join('\n')}
+${indLine}
 ━━━━━━━━━━━━━━━━
-${result.reasons.slice(0,3).map(r=>'✅ '+r).join('\n')}
+📌 Entry: ${result.analysis.split('.')[0]}.
 ━━━━━━━━━━━━━━━━
-🤖 GhostFX Ultimate | ${platformLabel}
+🤖 *GhostFX Ultimate* | ${platformLabel}
 ⚠️ Trading involves risk. Trade responsibly.`;
 
   const output=document.getElementById('signal-output');
@@ -1400,9 +1428,10 @@ ${result.reasons.slice(0,3).map(r=>'✅ '+r).join('\n')}
       <div class="tg-badge">TELEGRAM</div>
       <pre style="white-space:pre-wrap;word-break:break-word;font-size:10px;line-height:1.8;">${tgMsg}</pre>
     </div>
-    <div class="action-row">
-      <button class="btn-copy" onclick="copyTG()">📋 Copy Telegram</button>
-      <button class="btn-clr" onclick="document.getElementById('signal-output').style.display='none'">✕</button>
+    <div class="action-row" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn-copy" onclick="copyTG()" style="flex:1;min-width:80px;">📋 Copy</button>
+      <button id="btn-tg-send" onclick="sendToTelegram()" style="flex:2;min-width:150px;padding:11px;border-radius:9px;border:none;background:linear-gradient(135deg,#0088cc,#00aaff);color:#fff;font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;">📤 Send to Telegram</button>
+      <button class="btn-clr" onclick="document.getElementById('signal-output').style.display='none'" style="flex:0 0 auto;">✕</button>
     </div>
   </div>
 </div>`;
@@ -1420,9 +1449,47 @@ function copyTG(){
   if(!window._tgMsg) return;
   navigator.clipboard.writeText(window._tgMsg).then(()=>{
     const btn=document.querySelector('.btn-copy');
-    btn.textContent='✅ Copied!';
-    setTimeout(()=>btn.textContent='📋 Copy Telegram',2000);
+    if(btn){btn.textContent='✅ Copied!';setTimeout(()=>btn.textContent='📋 Copy',2000);}
   });
+}
+
+// ── One-tap Telegram Send ──
+const TG_TOKEN='8393564789:AAFRceME9Uv5JB8n1JrL1faHTXYeH1A0_ws';
+const TG_CHANNEL='-1003983786829';
+
+async function sendToTelegram(){
+  if(!window._tgMsg){showTGStatus('⚠️ No signal yet!','error');return;}
+  const btn=document.getElementById('btn-tg-send');
+  if(btn){btn.disabled=true;btn.textContent='📤 Sending...';}
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:TG_CHANNEL,text:window._tgMsg,parse_mode:'Markdown'})
+    });
+    const d=await r.json();
+    if(d.ok){
+      showTGStatus('✅ Sent to Telegram channel!','success');
+      if(btn){btn.textContent='✅ Sent!';setTimeout(()=>{btn.disabled=false;btn.textContent='📤 Send to Telegram';},3000);}
+    } else {
+      showTGStatus('❌ '+d.description,'error');
+      if(btn){btn.disabled=false;btn.textContent='📤 Send to Telegram';}
+    }
+  }catch(e){
+    showTGStatus('❌ Must be on GitHub Pages','error');
+    if(btn){btn.disabled=false;btn.textContent='📤 Send to Telegram';}
+  }
+}
+
+function showTGStatus(msg,type){
+  const ex=document.getElementById('tg-status');if(ex)ex.remove();
+  const div=document.createElement('div');div.id='tg-status';
+  const ok=type==='success';
+  div.style.cssText=`margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;font-family:'Share Tech Mono',monospace;text-align:center;${ok?'background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:var(--accent);':'background:rgba(255,51,85,0.1);border:1px solid rgba(255,51,85,0.3);color:var(--red);'}`;
+  div.textContent=msg;
+  const out=document.getElementById('signal-output');
+  if(out)out.appendChild(div);
+  setTimeout(()=>{const e=document.getElementById('tg-status');if(e)e.remove();},5000);
 }
 
 // ═══════════════════════════════
