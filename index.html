@@ -1322,7 +1322,7 @@ async function generateSignal(silent=false){
   for(const e of signalLog.slice(0,5)){if(e.result==='loss')streak++;else break;}
   if(streak>=2) alerts.push({type:'warn',msg:`🛑 <strong>${streak} losses in a row.</strong> Consider taking a break.`});
 
-  if(!silent) document.getElementById('smart-alerts').innerHTML=alerts.map(a=>`<div class="alert-box ${a.type}">${a.msg}</div>`).join('');
+  // Alerts shown after signal renders — moved to end of function
 
   // Get prices — use cached buffer first
   let prices = priceBuffers[currentSym] || priceHistory[currentSym];
@@ -1363,13 +1363,19 @@ async function generateSignal(silent=false){
   const agrDiv=document.getElementById('ind-agreement');
   agrDiv.innerHTML=result.signals.map(s=>`<div class="ind-tag agree-${s.dir}">${s.dir==='bull'?'↑':s.dir==='bear'?'↓':'→'} ${s.name}</div>`).join('');
 
-  // Render signal
-  if(!silent) renderSignalOutput(result);
+  // Always render signal output — silent just means no button spinner
+  renderSignalOutput(result);
 
-  if(!silent && btn){
+  // Reset button
+  if(btn){
     btn.disabled=false;
     btn.innerHTML='<div class="shimmer"></div>⚡ GENERATE SIGNAL';
   }
+
+  // Show alerts
+  const alertsDiv=document.getElementById('smart-alerts');
+  if(alertsDiv) alertsDiv.innerHTML=alerts.map(a=>`<div class="alert-box ${a.type}">${a.msg}</div>`).join('');
+
   return result;
 }
 
