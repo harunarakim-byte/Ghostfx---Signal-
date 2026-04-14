@@ -1303,7 +1303,7 @@ async function generateSignal(silent=false){
 
   // Warn if not hosted
   if(!isHosted){
-    alerts.push({type:'warn', msg:'⚠️ <strong>Upload to GitHub Pages</strong> for live Twelve Data prices. Currently using simulated data.'});
+    alerts.push({type:'warn', msg:'⚠️ <strong>Open from GitHub Pages</strong> for live Finnhub data. Currently using simulated prices.'});
   }
   const h=getWAT().getHours();
   if(h>=10&&h<14) alerts.push({type:'warn',msg:'⚠️ <strong>Slow zone!</strong> 10am-2pm WAT — OTC choppy. Best: 7-10am or 2-6pm.'});
@@ -1324,14 +1324,27 @@ async function generateSignal(silent=false){
 
   if(!silent) document.getElementById('smart-alerts').innerHTML=alerts.map(a=>`<div class="alert-box ${a.type}">${a.msg}</div>`).join('');
 
-  // Get prices
-  let prices=priceHistory[currentSym];
-  if(!prices||prices.length<50) prices=await fetchPrice(currentSym);
-  priceHistory[currentSym]=prices;
+  // Get prices — use cached buffer first
+  let prices = priceBuffers[currentSym] || priceHistory[currentSym];
+  if(!prices || prices.length < 10){
+    prices = await fetchPrice(currentSym);
+    priceBuffers[currentSym] = prices;
+    priceHistory[currentSym] = prices;
+  }
+  if(!prices || prices.length < 5){
+    if(!silent){
+      btn.disabled=false;
+      btn.innerHTML='<div class="shimmer"></div>⚡ GENERATE SIGNAL';
+    }
+    document.getElementById('smart-alerts').innerHTML='<div class="alert-box danger">⚠️ Could not fetch price data. Check internet and try again.</div>';
+    return;
+  }
   updateIndicatorDisplay(prices);
 
   // Run confluence analysis
-  const result=confluenceAnalysis(prices);
+  let result;
+  try { result = confluenceAnalysis(prices); }
+  catch(e){ console.log('Confluence error:', e); return; }
 
   // Update confluence display
   updateConfluenceDisplay(result);
@@ -1353,7 +1366,7 @@ async function generateSignal(silent=false){
   // Render signal
   if(!silent) renderSignalOutput(result);
 
-  if(!silent){
+  if(!silent && btn){
     btn.disabled=false;
     btn.innerHTML='<div class="shimmer"></div>⚡ GENERATE SIGNAL';
   }
@@ -1361,26 +1374,26 @@ async function generateSignal(silent=false){
 }
 
 function updateConfluenceDisplay(result){
+  if(!result) return;
   const mv=document.getElementById('conf-meter-val');
   const mf=document.getElementById('conf-meter-fill');
   const sb=document.getElementById('sig-strength-badge');
 
-  mv.textContent=result.confidence+'%';
-  mv.className='conf-meter-val '+result.strengthClass;
-
+  if(mv){mv.textContent=result.confidence+'%';mv.className='conf-meter-val '+(result.strengthClass||'weak');}
   setTimeout(()=>{
-    mf.style.width=result.confluencePct+'%';
-    mf.style.background=result.strengthClass==='very-strong'?'var(--accent)':result.strengthClass==='strong'?'#88ff44':result.strengthClass==='moderate'?'var(--gold)':'var(--red)';
+    if(mf){
+      mf.style.width=(result.confluencePct||50)+'%';
+      mf.style.background=result.strengthClass==='very-strong'?'var(--accent)':result.strengthClass==='strong'?'#88ff44':result.strengthClass==='moderate'?'var(--gold)':'var(--red)';
+    }
   },100);
-
-  sb.textContent=result.strength;
-  sb.className='signal-strength-badge ssb-'+result.strengthClass;
+  if(sb){sb.textContent=result.strength||'Analysing...';sb.className='signal-strength-badge ssb-'+(result.strengthClass||'weak');}
 }
 
 // ═══════════════════════════════
 // RENDER SIGNAL OUTPUT
 // ═══════════════════════════════
 function renderSignalOutput(result){
+  if(!result||!result.direction) return;
   const isCall=result.direction==='CALL';
   const wat=getWAT();
   const timeStr=wat.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' WAT';
