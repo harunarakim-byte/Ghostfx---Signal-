@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>GhostFX Ultimate</title>
+<title>GhostFX Ultimate v2</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GhostFX">
@@ -43,6 +43,19 @@ header{text-align:center;padding:18px 0 14px;}
 .badge-blue{background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.2);color:var(--blue);}
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.5);opacity:0.5}}
+
+/* ── NEW: Latency / tick bar ── */
+.tick-bar{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.tick-item{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.tick-lbl{font-size:8px;color:var(--muted);font-family:'Share Tech Mono',monospace;letter-spacing:2px;}
+.tick-val{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;}
+.tick-val.good{color:var(--accent);}
+.tick-val.warn{color:var(--gold);}
+.tick-val.bad{color:var(--red);}
+.tick-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;}
+.tick-dot.live{background:var(--accent);box-shadow:0 0 6px var(--accent);animation:pulse 1s infinite;}
+.tick-dot.rest{background:var(--gold);}
+.tick-dot.sim{background:var(--red);}
 
 /* Platform toggle */
 .platform-row{display:flex;gap:8px;margin-bottom:14px;}
@@ -103,6 +116,10 @@ header{text-align:center;padding:18px 0 14px;}
 .price-chg.up{background:rgba(0,255,136,0.1);color:var(--accent);}
 .price-chg.down{background:rgba(255,51,85,0.1);color:var(--red);}
 
+/* ── NEW: mini sparkline canvas ── */
+.sparkline-wrap{margin-top:10px;height:38px;position:relative;}
+.sparkline-wrap canvas{width:100%;height:38px;border-radius:4px;}
+
 /* Confluence meter */
 .confluence-wrap{margin-bottom:14px;}
 .conf-meter-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
@@ -113,7 +130,7 @@ header{text-align:center;padding:18px 0 14px;}
 .conf-meter-val.moderate{color:var(--gold);}
 .conf-meter-val.weak{color:var(--red);}
 .conf-meter-bg{height:10px;background:rgba(255,255,255,0.05);border-radius:5px;overflow:hidden;}
-.conf-meter-fill{height:100%;border-radius:5px;transition:width 1s cubic-bezier(.4,0,.2,1);}
+.conf-meter-fill{height:100%;border-radius:5px;transition:width 0.6s cubic-bezier(.4,0,.2,1);}
 .signal-strength-badge{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;font-family:'Orbitron',monospace;letter-spacing:1px;margin-top:6px;}
 .ssb-very-strong{background:rgba(0,255,136,0.15);border:1px solid var(--accent);color:var(--accent);}
 .ssb-strong{background:rgba(136,255,68,0.12);border:1px solid #88ff44;color:#88ff44;}
@@ -243,6 +260,13 @@ header{text-align:center;padding:18px 0 14px;}
 .page{display:none;}
 .page.active{display:block;}
 
+/* ── NEW: Instant Signal Flash overlay ── */
+.instant-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9997;pointer-events:none;opacity:0;transition:opacity .3s;}
+.instant-flash.show{opacity:1;}
+.flash-pill{padding:14px 28px;border-radius:20px;font-family:'Orbitron',monospace;font-size:28px;font-weight:900;letter-spacing:4px;text-align:center;}
+.flash-pill.call{background:rgba(0,255,136,0.18);border:3px solid var(--accent);color:var(--accent);box-shadow:0 0 60px rgba(0,255,136,0.4);}
+.flash-pill.put{background:rgba(255,51,85,0.18);border:3px solid var(--red);color:var(--red);box-shadow:0 0 60px rgba(255,51,85,0.4);}
+
 /* Password Screen */
 .lock-screen{position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;}
 .lock-screen::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 30% 25%,rgba(0,255,136,0.06) 0%,transparent 55%),radial-gradient(ellipse at 70% 75%,rgba(0,200,255,0.04) 0%,transparent 55%);pointer-events:none;}
@@ -269,6 +293,12 @@ header{text-align:center;padding:18px 0 14px;}
 </style>
 </head>
 <body>
+
+<!-- Instant Signal Flash -->
+<div class="instant-flash" id="instant-flash">
+  <div class="flash-pill" id="flash-pill">--</div>
+</div>
+
 <div class="app">
 
 <!-- PAGE: SIGNALS -->
@@ -279,12 +309,36 @@ header{text-align:center;padding:18px 0 14px;}
     <svg width="34" height="34" viewBox="0 0 34 34"><rect width="34" height="34" rx="7" fill="#010810"/><rect width="34" height="34" rx="7" fill="none" stroke="#00ff88" stroke-width="1.5"/><polyline points="5,24 12,16 19,21 29,10" fill="none" stroke="#00ff88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="24,10 29,10 29,15" fill="none" stroke="#00ff88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="logo">GHOST<span>FX</span> ULTIMATE</div>
   </div>
-  <div class="logo-sub">PREMIUM AI SIGNAL BOT · MULTI-INDICATOR CONFLUENCE</div>
+  <div class="logo-sub">PREMIUM AI SIGNAL BOT · v2 EVENT-DRIVEN ENGINE</div>
   <div class="badges">
-    <div class="badge badge-green"><div class="pulse"></div> LIVE DATA</div>
+    <div class="badge badge-green"><div class="pulse"></div> <span id="badge-live-text">LIVE WS</span></div>
     <div class="badge badge-blue">IQ OPTION + POCKET OPTION</div>
   </div>
 </header>
+
+<!-- ── NEW: Live Tick Status Bar ── -->
+<div class="tick-bar">
+  <div class="tick-item">
+    <div class="tick-lbl">CONNECTION</div>
+    <div class="tick-val" id="tick-conn"><span class="tick-dot sim"></span>INIT</div>
+  </div>
+  <div class="tick-item">
+    <div class="tick-lbl">LATENCY</div>
+    <div class="tick-val good" id="tick-lat">--ms</div>
+  </div>
+  <div class="tick-item">
+    <div class="tick-lbl">TICK RATE</div>
+    <div class="tick-val good" id="tick-rate">--/s</div>
+  </div>
+  <div class="tick-item">
+    <div class="tick-lbl">BUFFER</div>
+    <div class="tick-val good" id="tick-buf">0/60</div>
+  </div>
+  <div class="tick-item">
+    <div class="tick-lbl">SIGNAL AGE</div>
+    <div class="tick-val good" id="tick-age">--</div>
+  </div>
+</div>
 
 <!-- Platform Toggle -->
 <div class="platform-row">
@@ -309,7 +363,6 @@ header{text-align:center;padding:18px 0 14px;}
   <div><div class="best-pair-label">🏆 STRONGEST PAIR NOW</div><div class="best-pair-val" id="best-pair">Analysing...</div></div>
   <div style="text-align:right"><div class="best-pair-label">SIGNAL SCORE</div><div class="best-pair-score" id="best-score">--</div></div>
 </div>
-<!-- Your best pairs from tracker -->
 <div id="tracker-rec" style="display:none;background:rgba(0,255,136,0.06);border:1px solid rgba(0,255,136,0.15);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--accent);font-family:Share Tech Mono,monospace;letter-spacing:1px;"></div>
 
 <!-- Daily Stats -->
@@ -339,6 +392,8 @@ header{text-align:center;padding:18px 0 14px;}
       <div class="price-chg" id="price-chg" style="margin-top:2px;">--</div>
     </div>
   </div>
+  <!-- ── NEW: Sparkline ── -->
+  <div class="sparkline-wrap"><canvas id="sparkline-canvas"></canvas></div>
   <div class="ind-row">
     <div class="ind-box"><div class="ind-lbl">MA 20</div><div class="ind-val" id="i-ma20">--</div><div class="ind-sig" id="s-ma20">--</div></div>
     <div class="ind-box"><div class="ind-lbl">MA 50</div><div class="ind-val" id="i-ma50">--</div><div class="ind-sig" id="s-ma50">--</div></div>
@@ -403,8 +458,8 @@ header{text-align:center;padding:18px 0 14px;}
 
 <!-- Auto countdown -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;">⚡ AUTO SIGNAL · <span style="color:var(--accent)">1 MIN REFRESH</span></div>
-  <div class="countdown" id="auto-cd">Fetching...</div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:2px;">⚡ EVENT-DRIVEN · <span style="color:var(--accent)" id="scan-mode-lbl">WS LIVE</span></div>
+  <div class="countdown" id="auto-cd">Waiting for ticks...</div>
 </div>
 
 <!-- Generate Button -->
@@ -435,16 +490,10 @@ header{text-align:center;padding:18px 0 14px;}
     <div class="wr-bg"><div class="wr-win" id="wr-win" style="width:0%"></div><div class="wr-loss" id="wr-loss" style="width:0%"></div></div>
     <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:9px;font-family:'Share Tech Mono',monospace;"><span style="color:var(--accent)">● WINS</span><span style="color:var(--red)">LOSSES ●</span></div>
   </div>
-  <!-- Performance by pair -->
   <div class="card-lbl" style="margin-bottom:8px;">Performance by Asset</div>
-  <div class="perf-analytics" id="perf-analytics">
-    <div class="empty-state"><div>📊</div>No data yet</div>
-  </div>
-  <!-- Best hours -->
+  <div class="perf-analytics" id="perf-analytics"><div class="empty-state"><div>📊</div>No data yet</div></div>
   <div class="card-lbl" style="margin-bottom:8px;">Best Trading Hours (WAT)</div>
-  <div class="perf-analytics" id="best-hours">
-    <div class="empty-state"><div>🕐</div>No data yet</div>
-  </div>
+  <div class="perf-analytics" id="best-hours"><div class="empty-state"><div>🕐</div>No data yet</div></div>
   <div class="log-controls">
     <button class="filter-btn active" onclick="filterLog('all',this)">ALL</button>
     <button class="filter-btn" onclick="filterLog('win',this)">WINS</button>
@@ -482,15 +531,15 @@ header{text-align:center;padding:18px 0 14px;}
     <div class="lock-error" id="lock-error"></div>
     <button class="lock-btn" onclick="checkPin()">🔓 UNLOCK ACCESS</button>
     <div class="lock-attempts" id="lock-attempts"></div>
-    <div class="lock-branding">GHOSTFX ULTIMATE · PRIVATE ACCESS<br>Contact admin for access code</div>
+    <div class="lock-branding">GHOSTFX ULTIMATE v2 · PRIVATE ACCESS<br>Contact admin for access code</div>
   </div>
 </div>
 
 <script>
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // CONFIG
-// ═══════════════════════════════
-const CORRECT_PIN = '2580'; // Change to your PIN
+// ═══════════════════════════════════════════════════════
+const CORRECT_PIN = '2580';
 const ASSETS = [
   {sym:'EURUSD',otc:'EUR/USD OTC',label:'EUR/USD'},
   {sym:'GBPUSD',otc:'GBP/USD OTC',label:'GBP/USD'},
@@ -509,18 +558,43 @@ const NEWS_EVENTS = [
   {hour:14,min:30,name:'USD CPI Data',impact:'MEDIUM',days:[2]},
   {hour:10,min:0,name:'GBP GDP Data',impact:'MEDIUM',days:[1,3]},
 ];
+const FINNHUB_KEY = 'd7dl4uhr01qggoeoo8pgd7dl4uhr01qggoeoo8q0';
+const FINNHUB_SYMBOLS = {
+  'EURUSD':'OANDA:EUR_USD','GBPUSD':'OANDA:GBP_USD','EURJPY':'OANDA:EUR_JPY',
+  'USDJPY':'OANDA:USD_JPY','AUDUSD':'OANDA:AUD_USD','USDCAD':'OANDA:USD_CAD',
+  'GBPJPY':'OANDA:GBP_JPY','EURGBP':'OANDA:EUR_GBP'
+};
+const TG_TOKEN='8393564789:AAFRceME9Uv5JB8n1JrL1faHTXYeH1A0_ws';
+const TG_CHANNEL='-1003983786829';
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // STATE
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 let currentSym = 'EURUSD';
 let currentOTC = 'EUR/USD OTC';
 let currentExpiry = '5 min';
 let currentPlatform = 'iq';
-let priceHistory = {};
-let assetScores = {};
+
+// ── UPGRADED: price buffers now hold more data for indicators ──
+const priceBuffers = {};         // sym → closes array (max 120)
+const liveIndicators = {};       // sym → pre-calculated indicators (updated on every tick)
+const lastSignalResult = {};     // sym → last generated signal result
+
+let finnhubWS = null;
+let wsReady = false;
+let wsReconnectTimer = null;
+let lastDataSource = 'unknown';
+const isHosted = location.protocol === 'https:' || location.hostname === 'localhost';
+
+// ── NEW: Timing metrics ──
+let tickTimestamps = [];         // rolling window for tick rate
+let lastTickTime = null;
+let wsPingTime = null;
+let lastSignalTime = null;
+let signalAgeTimer = null;
+let restFallbackTimer = null;
+
 let autoTimer = null;
-let cdCount = 60;
 let signalLog = [];
 let dailyStats = {signals:0,wins:0,losses:0,profit:0,date:''};
 let pinAttempts = 0;
@@ -530,52 +604,12 @@ try {
   const ds = JSON.parse(localStorage.getItem('ghostfx_ult_daily')||'{}');
   const today = new Date().toDateString();
   if(ds.date === today) dailyStats = ds;
-  else { dailyStats = {signals:0,wins:0,losses:0,profit:0,date:today}; }
+  else dailyStats = {signals:0,wins:0,losses:0,profit:0,date:today};
 } catch(e){}
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // PASSWORD
-// ═══════════════════════════════
-// API usage tracker — Twelve Data free = 800 calls/day
-function trackAPIUsage(){
-  const today = new Date().toDateString();
-  let usage = {date:'', calls:0};
-  try{ usage = JSON.parse(localStorage.getItem('td_usage')||'{}'); }catch(e){}
-  if(usage.date !== today){ usage = {date:today, calls:0}; }
-
-  // Each fetchAllAndAnalyze = 8 assets x 1 call = 8 calls
-  // Each individual fetchPrice = 1 call
-  // We track and warn when approaching 750 calls
-  window.tdUsage = usage;
-
-  // Check remaining
-  const remaining = 800 - usage.calls;
-  if(remaining < 100){
-    const alertsDiv = document.getElementById('smart-alerts');
-    if(alertsDiv){
-      const warn = document.createElement('div');
-      warn.className = 'alert-box warn';
-      warn.innerHTML = `⚠️ <strong>API Limit Warning!</strong> ${remaining} Twelve Data calls remaining today. Bot will switch to Yahoo backup when limit is reached.`;
-      alertsDiv.prepend(warn);
-    }
-  }
-}
-
-function logAPICall(count=1){
-  const today = new Date().toDateString();
-  let usage = window.tdUsage || {date:today, calls:0};
-  if(usage.date !== today) usage = {date:today, calls:0};
-  usage.calls += count;
-  window.tdUsage = usage;
-  try{ localStorage.setItem('td_usage', JSON.stringify(usage)); }catch(e){}
-}
-
-function checkSession(){
-  if(sessionStorage.getItem('ghostfx_ult')==='true'){
-    document.getElementById('lock-screen').style.display='none';
-    initApp();
-  }
-}
+// ═══════════════════════════════════════════════════════
 function onPinInput(input){
   const val=input.value;
   for(let i=0;i<5;i++){const d=document.getElementById('dot-'+i);if(d)d.className='lock-dot'+(i<val.length?' filled':'');}
@@ -604,26 +638,32 @@ function checkPin(){
     } else {errEl.textContent='❌ WRONG CODE';attEl.textContent=rem+' attempts left';}
   }
 }
+function checkSession(){
+  if(sessionStorage.getItem('ghostfx_ult')==='true'){
+    document.getElementById('lock-screen').style.display='none';
+    initApp();
+  }
+}
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // INIT
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 function initApp(){
   buildAssetChips();
-  updateWAT();setInterval(updateWAT,1000);
+  updateWAT(); setInterval(updateWAT,1000);
   setupPills();
   calcStake();
   updateDailyStats();
   updateTrackerRecommendations();
-  checkNewsEvents();setInterval(checkNewsEvents,60000);
-  trackAPIUsage();
-  initWebSockets(); // Start Polygon WebSocket connections
-  fetchAllAndAnalyze();
+  checkNewsEvents(); setInterval(checkNewsEvents,60000);
+  startSignalAgeTimer();
+  initWebSockets();
+  updateTickBar();
 }
 
-// ═══════════════════════════════
-// PLATFORM
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
+// PLATFORM / TABS
+// ═══════════════════════════════════════════════════════
 function setPlatform(p){
   currentPlatform=p;
   document.getElementById('btn-iq').className='platform-btn iq'+(p==='iq'?' active':'');
@@ -631,10 +671,6 @@ function setPlatform(p){
   document.getElementById('platform-tag').textContent=p==='iq'?'IQ OTC':'PO OTC';
   document.getElementById('platform-tag').style.color=p==='iq'?'#ff6b35':'var(--blue)';
 }
-
-// ═══════════════════════════════
-// TABS
-// ═══════════════════════════════
 function switchTab(tab){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -643,9 +679,9 @@ function switchTab(tab){
   if(tab==='tracker') renderTracker();
 }
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // ASSET CHIPS
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 function buildAssetChips(){
   const wrap=document.getElementById('asset-chips');
   wrap.innerHTML=ASSETS.map((a,i)=>`
@@ -658,381 +694,472 @@ function buildAssetChips(){
 function selectAsset(sym,otc,label,el){
   document.querySelectorAll('.asset-chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
-  currentSym=sym;currentOTC=otc;
+  currentSym=sym; currentOTC=otc;
   document.getElementById('live-asset-lbl').textContent=label;
-  // Clear cached buffer for this pair to force fresh fetch
-  delete priceBuffers[sym];
-  // Reset indicator display
   ['i-ma20','i-ma50','i-rsi','i-macd','i-stoch'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){el.textContent='--';el.className='ind-val';}
+    const e=document.getElementById(id);if(e){e.textContent='--';e.className='ind-val';}
   });
-  ['s-ma20','s-ma50','s-rsi','s-macd','s-stoch'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.textContent='--';
-  });
+  ['s-ma20','s-ma50','s-rsi','s-macd','s-stoch'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='--';});
   document.getElementById('live-price').textContent='--';
   document.getElementById('price-chg').textContent='--';
-  // Fetch fresh data for this specific pair
-  fetchAndAnalyze(sym);
+  // If we already have data — display instantly (pre-calculated)
+  if(priceBuffers[sym] && priceBuffers[sym].length >= 5){
+    updateIndicatorDisplay(priceBuffers[sym]);
+    drawSparkline(priceBuffers[sym]);
+    updateTickBuf();
+  } else {
+    fetchRESTFill(sym);
+  }
 }
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // WAT CLOCK
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 function getWAT(){
   const now=new Date();
   return new Date(now.getTime()+now.getTimezoneOffset()*60000+3600000);
 }
-
-let goldenHourAlerted=false;
-let goldenHourEndAlerted=false;
-
+let goldenHourAlerted=false,goldenHourEndAlerted=false;
 function updateWAT(){
   const wat=getWAT();
   const h=wat.getHours(),m=String(wat.getMinutes()).padStart(2,'0'),s=String(wat.getSeconds()).padStart(2,'0');
   document.getElementById('wat-time').textContent=`${h}:${m}:${s} WAT`;
   const el=document.getElementById('wat-status');
-
-  // Golden hour: 16:00-17:00 WAT
   if(h===16){
     el.textContent='🏆 GOLDEN HOUR';el.className='wat-s best';
-    if(!goldenHourAlerted){
-      goldenHourAlerted=true;goldenHourEndAlerted=false;
-      showGoldenHourAlert(true);
-    }
+    if(!goldenHourAlerted){goldenHourAlerted=true;goldenHourEndAlerted=false;showGoldenHourAlert(true);}
   } else if(h===17&&m==='00'&&!goldenHourEndAlerted){
-    goldenHourEndAlerted=true;goldenHourAlerted=false;
-    showGoldenHourAlert(false);
+    goldenHourEndAlerted=true;goldenHourAlerted=false;showGoldenHourAlert(false);
   } else if((h>=7&&h<10)||(h>=14&&h<18)){el.textContent='🔥 PRIME TIME';el.className='wat-s best';}
   else if((h>=10&&h<14)||(h>=18&&h<21)){el.textContent='⚡ MODERATE';el.className='wat-s warn';}
   else{el.textContent='😴 SLOW ZONE';el.className='wat-s bad';}
 }
-
 function showGoldenHourAlert(starting){
-  var existing=document.getElementById("golden-alert");
-  if(existing) existing.remove();
-  var div=document.createElement("div");
-  div.id="golden-alert";
-  div.style.cssText="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9998;width:90%;max-width:380px;border-radius:14px;padding:16px 18px;text-align:center;";
+  const existing=document.getElementById('golden-alert');if(existing)existing.remove();
+  const div=document.createElement('div');div.id='golden-alert';
+  div.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9998;width:90%;max-width:380px;border-radius:14px;padding:16px 18px;text-align:center;';
   if(starting){
-    div.style.background="linear-gradient(135deg,rgba(0,255,136,0.15),rgba(0,200,255,0.1))";
-    div.style.border="2px solid #00ff88";
-    div.style.boxShadow="0 0 30px rgba(0,255,136,0.3)";
-    var btn1=document.createElement("button");
-    btn1.textContent="LET'S TRADE 🚀";
-    btn1.style.cssText="margin-top:10px;background:rgba(0,255,136,0.15);border:1px solid #00ff88;border-radius:8px;color:#00ff88;padding:6px 20px;cursor:pointer;font-size:12px;font-weight:700;";
-    btn1.onclick=function(){document.getElementById("golden-alert").remove();};
+    div.style.background='linear-gradient(135deg,rgba(0,255,136,0.15),rgba(0,200,255,0.1))';
+    div.style.border='2px solid #00ff88';div.style.boxShadow='0 0 30px rgba(0,255,136,0.3)';
     div.innerHTML="<div style='font-family:Orbitron,monospace;font-size:16px;font-weight:900;color:#00ff88;letter-spacing:2px;'>🏆 GOLDEN HOUR STARTED!</div><div style='font-size:12px;color:#b8d4f0;margin-top:6px;line-height:1.6;'>4PM - 5PM WAT<br>Your best trading window!<br>Trade GBP/USD OTC and USD/CAD OTC</div>";
-    div.appendChild(btn1);
+    const btn=document.createElement('button');btn.textContent="LET'S TRADE 🚀";btn.style.cssText='margin-top:10px;background:rgba(0,255,136,0.15);border:1px solid #00ff88;border-radius:8px;color:#00ff88;padding:6px 20px;cursor:pointer;font-size:12px;font-weight:700;';btn.onclick=()=>div.remove();div.appendChild(btn);
   } else {
-    div.style.background="linear-gradient(135deg,rgba(255,51,85,0.1),rgba(255,215,64,0.08))";
-    div.style.border="2px solid #ff3355";
-    var btn2=document.createElement("button");
-    btn2.textContent="GOT IT ✓";
-    btn2.style.cssText="margin-top:10px;background:rgba(255,51,85,0.1);border:1px solid #ff3355;border-radius:8px;color:#ff3355;padding:6px 20px;cursor:pointer;font-size:12px;font-weight:700;";
-    btn2.onclick=function(){document.getElementById("golden-alert").remove();};
-    div.innerHTML="<div style='font-family:Orbitron,monospace;font-size:14px;font-weight:900;color:#ff3355;letter-spacing:2px;'>⏰ GOLDEN HOUR ENDED</div><div style='font-size:12px;color:#b8d4f0;margin-top:6px;'>5PM WAT — Consider stopping for the day.<br>Check your results in Tracker!</div>";
-    div.appendChild(btn2);
+    div.style.background='linear-gradient(135deg,rgba(255,51,85,0.1),rgba(255,215,64,0.08))';div.style.border='2px solid #ff3355';
+    div.innerHTML="<div style='font-family:Orbitron,monospace;font-size:14px;font-weight:900;color:#ff3355;letter-spacing:2px;'>⏰ GOLDEN HOUR ENDED</div><div style='font-size:12px;color:#b8d4f0;margin-top:6px;'>5PM WAT — Consider stopping for the day.</div>";
+    const btn=document.createElement('button');btn.textContent='GOT IT ✓';btn.style.cssText='margin-top:10px;background:rgba(255,51,85,0.1);border:1px solid #ff3355;border-radius:8px;color:#ff3355;padding:6px 20px;cursor:pointer;font-size:12px;font-weight:700;';btn.onclick=()=>div.remove();div.appendChild(btn);
   }
   document.body.appendChild(div);
-  setTimeout(function(){var a=document.getElementById("golden-alert");if(a)a.remove();},15000);
+  setTimeout(()=>{const a=document.getElementById('golden-alert');if(a)a.remove();},15000);
 }
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // NEWS EVENTS
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 function checkNewsEvents(){
-  const wat=getWAT();
-  const h=wat.getHours(),m=wat.getMinutes(),day=wat.getDay();
+  const wat=getWAT();const h=wat.getHours(),m=wat.getMinutes(),day=wat.getDay();
   const bar=document.getElementById('news-bar');
   let upcoming=null,urgent=null;
   for(const e of NEWS_EVENTS){
     if(!e.days.includes(day)) continue;
     const diff=(e.hour*60+e.min)-(h*60+m);
-    if(diff>=0&&diff<=30){if(!upcoming||diff<(upcoming.diff)){upcoming={...e,diff};}}
-    if(diff>=-5&&diff<0){urgent=e;}
+    if(diff>=0&&diff<=30){if(!upcoming||diff<upcoming.diff)upcoming={...e,diff};}
+    if(diff>=-5&&diff<0)urgent=e;
   }
-  if(urgent){
-    bar.className='news-bar danger';
-    bar.innerHTML=`🚨 NEWS NOW: <strong>${urgent.name}</strong> — AVOID TRADING!`;
-  } else if(upcoming){
-    bar.className='news-bar warning';
-    bar.innerHTML=`⚠️ News in ${upcoming.diff}min: <strong>${upcoming.name}</strong> (${upcoming.impact}) — Be cautious`;
+  if(urgent){bar.className='news-bar danger';bar.innerHTML=`🚨 NEWS NOW: <strong>${urgent.name}</strong> — AVOID TRADING!`;}
+  else if(upcoming){bar.className='news-bar warning';bar.innerHTML=`⚠️ News in ${upcoming.diff}min: <strong>${upcoming.name}</strong> (${upcoming.impact}) — Be cautious`;}
+  else{bar.className='news-bar clear';bar.innerHTML='✅ No major news events — Safe to trade';}
+}
+
+// ═══════════════════════════════════════════════════════
+// ── UPGRADED: WEBSOCKET ENGINE ──
+// Event-driven: on each tick → analyze immediately → auto-update UI
+// ═══════════════════════════════════════════════════════
+function initWebSockets(){
+  if(isHosted){
+    connectFinnhubWS();
   } else {
-    bar.className='news-bar clear';
-    bar.innerHTML='✅ No major news events — Safe to trade';
+    // Local file — use REST to fill buffers then switch to REST polling
+    setConnectionStatus('rest');
+    prefillAllBuffers().then(()=>{
+      startRESTPolling();
+    });
   }
 }
 
-// ═══════════════════════════════
-// PRICE FETCH
-// ═══════════════════════════════
-// ═══════════════════════════════════════
-// FINNHUB WEBSOCKET — REAL-TIME LIVE DATA
-// ═══════════════════════════════════════
-const FINNHUB_KEY = 'd7dl4uhr01qggoeoo8pgd7dl4uhr01qggoeoo8q0';
-
-let lastDataSource = 'unknown';
-const isHosted = location.protocol === 'https:' || location.hostname === 'localhost';
-
-// Price buffers — stores real-time ticks per symbol
-const priceBuffers = {};
-let finnhubWS = null;
-let wsReady = false;
-let wsSubscribed = [];
-
-// Finnhub forex symbols
-const FINNHUB_SYMBOLS = {
-  'EURUSD': 'OANDA:EUR_USD',
-  'GBPUSD': 'OANDA:GBP_USD',
-  'EURJPY': 'OANDA:EUR_JPY',
-  'USDJPY': 'OANDA:USD_JPY',
-  'AUDUSD': 'OANDA:AUD_USD',
-  'USDCAD': 'OANDA:USD_CAD',
-  'GBPJPY': 'OANDA:GBP_JPY',
-  'EURGBP': 'OANDA:EUR_GBP'
-};
-
-// Single Finnhub WebSocket connection for all pairs
-function initWebSockets() {
-  if (!isHosted) {
-    console.warn('Running locally — WebSocket needs GitHub Pages hosting');
-    // Still try REST even when local
-    prefillBuffers();
-    return;
-  }
-  connectFinnhubWS();
-}
-
-// Pre-fill ALL pairs simultaneously — no waiting
-async function prefillBuffers() {
-  console.log('Pre-filling all buffers simultaneously...');
-  const to = Math.floor(Date.now() / 1000);
-  const from = to - (60 * 60); // last 60 minutes only — faster
-
-  // Fetch all 8 pairs at the same time
-  const fetches = ASSETS.map(async (a) => {
-    const fSym = FINNHUB_SYMBOLS[a.sym];
-    if (!fSym) return;
-    try {
-      const url = `https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
-      const r = await fetch(url);
-      if (r.ok) {
-        const d = await r.json();
-        if (d.s === 'ok' && d.c && d.c.length > 5) {
-          const closes = d.c.map(v => parseFloat(v)).filter(v => !isNaN(v));
-          priceBuffers[a.sym] = closes;
-          if (a.sym === currentSym) {
-            lastDataSource = 'finnhub_rest';
-            updateIndicatorDisplay(closes, 'finnhub_rest');
-          }
-          console.log('✅', a.sym, closes.length, 'candles');
-        }
-      }
-    } catch(e) {}
-  });
-
-  // Wait for ALL to complete together
-  await Promise.all(fetches);
-  console.log('✅ All buffers ready');
-  // Trigger analysis immediately with fresh data
-  if (priceBuffers[currentSym] && priceBuffers[currentSym].length > 10) {
-    generateSignal(true);
-  }
-}
-
-function connectFinnhubWS() {
-  try {
+function connectFinnhubWS(){
+  if(wsReconnectTimer){clearTimeout(wsReconnectTimer);wsReconnectTimer=null;}
+  try{
+    setConnectionStatus('connecting');
+    const wsStart = Date.now();
     finnhubWS = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_KEY}`);
 
     finnhubWS.onopen = () => {
-      console.log('✅ Finnhub WebSocket connected');
-      const wsEl = document.getElementById('ws-status');
-      if (wsEl) { wsEl.textContent = '🟢 FINNHUB LIVE'; wsEl.style.color = 'var(--accent)'; }
-      // Subscribe to all pairs
-      ASSETS.forEach(a => {
-        const sym = FINNHUB_SYMBOLS[a.sym];
-        if (sym) {
-          finnhubWS.send(JSON.stringify({type:'subscribe', symbol: sym}));
-          wsSubscribed.push(sym);
-        }
-      });
+      wsPingTime = Date.now() - wsStart;
       wsReady = true;
       lastDataSource = 'finnhub';
-      // Immediately pre-fill buffers with REST data while WebSocket ticks accumulate
-      prefillBuffers();
+      setConnectionStatus('live');
+      updateWSStatusEl('🟢 FINNHUB WS LIVE', 'var(--accent)');
+      // Subscribe all pairs
+      ASSETS.forEach(a => {
+        const sym = FINNHUB_SYMBOLS[a.sym];
+        if(sym) finnhubWS.send(JSON.stringify({type:'subscribe',symbol:sym}));
+      });
+      // Pre-fill with REST while ticks accumulate (both run in parallel)
+      prefillAllBuffers();
+      updateTickBar();
     };
 
     finnhubWS.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'trade' && msg.data) {
-        msg.data.forEach(tick => {
-          // Find which symbol this is
-          const entry = Object.entries(FINNHUB_SYMBOLS).find(([k,v]) => v === tick.s);
-          if (!entry) return;
-          const sym = entry[0];
-          const price = parseFloat(tick.p);
-          if (isNaN(price)) return;
+      // ── EVENT-DRIVEN: process immediately on every tick ──
+      const tickReceived = Date.now();
+      try{
+        const msg = JSON.parse(event.data);
+        if(msg.type === 'trade' && msg.data){
+          msg.data.forEach(tick => {
+            const entry = Object.entries(FINNHUB_SYMBOLS).find(([k,v])=>v===tick.s);
+            if(!entry) return;
+            const sym = entry[0];
+            const price = parseFloat(tick.p);
+            if(isNaN(price)) return;
 
-          // Add to buffer
-          if (!priceBuffers[sym]) priceBuffers[sym] = [];
-          priceBuffers[sym].push(price);
-          if (priceBuffers[sym].length > 120) priceBuffers[sym].shift();
+            // ── Step 1: Update buffer ──
+            if(!priceBuffers[sym]) priceBuffers[sym] = [];
+            priceBuffers[sym].push(price);
+            if(priceBuffers[sym].length > 120) priceBuffers[sym].shift();
 
-          // Update display if this is the current pair
-          if (sym === currentSym) updateLivePriceTick(sym, price);
+            // ── Step 2: Pre-calculate indicators INSTANTLY (always live) ──
+            if(priceBuffers[sym].length >= 5){
+              liveIndicators[sym] = confluenceAnalysisForSym(priceBuffers[sym], sym);
+              updateAssetStrength(sym, liveIndicators[sym].confluencePct);
+            }
 
-          lastDataSource = 'finnhub';
-        });
-      }
-      if (msg.type === 'error') {
-        console.log('Finnhub error:', msg.msg);
-        const wsEl = document.getElementById('ws-status');
-        if (wsEl) { wsEl.textContent = '❌ WS Error: ' + msg.msg; wsEl.style.color = 'var(--red)'; }
-      }
+            // ── Step 3: Update display if active pair ──
+            if(sym === currentSym){
+              lastTickTime = tickReceived;
+              recordTick();
+              updateLivePriceTick(sym, price);
+              // Live indicator update without generating a full signal card
+              if(priceBuffers[sym].length >= 5){
+                updateIndicatorDisplay(priceBuffers[sym]);
+                drawSparkline(priceBuffers[sym]);
+                updateConfluenceDisplay(liveIndicators[sym]);
+                updateCandlePatternDisplay(liveIndicators[sym]);
+                updateIndicatorAgreement(liveIndicators[sym]);
+              }
+              updateTickBuf();
+            }
+            lastDataSource = 'finnhub';
+          });
+        }
+        if(msg.type==='error'){
+          updateWSStatusEl('❌ WS Error: '+msg.msg, 'var(--red)');
+        }
+      }catch(e){}
     };
 
-    finnhubWS.onerror = (e) => {
-      console.log('Finnhub WS error:', e);
-      lastDataSource = 'error';
-      const wsEl = document.getElementById('ws-status');
-      if (wsEl) { wsEl.textContent = '❌ Connection Error'; wsEl.style.color = 'var(--red)'; }
+    finnhubWS.onerror = () => {
+      wsReady = false;
+      setConnectionStatus('error');
+      updateWSStatusEl('❌ WS Error', 'var(--red)');
     };
 
     finnhubWS.onclose = () => {
       wsReady = false;
-      console.log('Finnhub WS closed — reconnecting in 3s...');
-      const wsEl = document.getElementById('ws-status');
-      if (wsEl) { wsEl.textContent = '🔄 Reconnecting...'; wsEl.style.color = 'var(--gold)'; }
-      setTimeout(connectFinnhubWS, 3000);
+      setConnectionStatus('reconnecting');
+      updateWSStatusEl('🔄 Reconnecting...', 'var(--gold)');
+      wsReconnectTimer = setTimeout(connectFinnhubWS, 3000);
+      // Fallback to REST while reconnecting
+      startRESTPolling();
     };
 
-  } catch(e) {
-    console.log('WebSocket init error:', e.message);
+  }catch(e){
+    setConnectionStatus('error');
+    startRESTPolling();
   }
 }
 
-// Update price display in real-time
-function updateLivePriceTick(sym, price) {
-  const dec = sym.includes('JPY') ? 3 : 5;
-  const priceEl = document.getElementById('live-price');
-  const prevPrice = parseFloat(priceEl?.textContent) || price;
-  if (priceEl) {
-    priceEl.textContent = price.toFixed(dec);
-    priceEl.style.color = price > prevPrice ? 'var(--accent)' : price < prevPrice ? 'var(--red)' : 'var(--accent)';
-    setTimeout(() => { if(priceEl) priceEl.style.color = 'var(--accent)'; }, 500);
-  }
-  // Update data source tag with buffer size
-  const ds = document.getElementById('data-source-tag');
-  if (ds) {
-    const bufSize = priceBuffers[sym] ? priceBuffers[sym].length : 0;
-    ds.textContent = bufSize >= 5 ? '🔴 FINNHUB LIVE ✅' : `⏳ BUFFERING ${bufSize}/5`;
-    ds.style.color = bufSize >= 5 ? 'var(--accent)' : 'var(--gold)';
-    ds.style.background = bufSize >= 5 ? 'rgba(0,255,136,0.08)' : 'rgba(255,215,64,0.08)';
-    ds.style.borderColor = bufSize >= 5 ? 'rgba(0,255,136,0.2)' : 'rgba(255,215,64,0.2)';
-  }
+// ── REST Polling fallback (1-second interval) ──
+// Runs when WS is unavailable — faster than original 60s
+function startRESTPolling(){
+  if(restFallbackTimer) return; // already running
+  restFallbackTimer = setInterval(async()=>{
+    if(wsReady){clearInterval(restFallbackTimer);restFallbackTimer=null;return;}
+    await fetchRESTFill(currentSym);
+    const prices = priceBuffers[currentSym];
+    if(prices && prices.length >= 5){
+      liveIndicators[currentSym] = confluenceAnalysisForSym(prices, currentSym);
+      updateIndicatorDisplay(prices);
+      drawSparkline(prices);
+      updateConfluenceDisplay(liveIndicators[currentSym]);
+    }
+  }, 3000); // every 3s via REST when WS is down
 }
 
-// Fetch prices — WebSocket buffer first, then Finnhub REST
-async function fetchPrice(sym) {
-  // PRIMARY: Finnhub WebSocket live buffer (needs only 5 ticks)
-  if (priceBuffers[sym] && priceBuffers[sym].length >= 5) {
-    lastDataSource = 'finnhub';
-    console.log('✅ Finnhub live buffer:', priceBuffers[sym].length, 'ticks for', sym);
-    return [...priceBuffers[sym]];
-  }
-
-  // SECONDARY: Finnhub REST API (1-min candles)
-  try {
-    const fSym = FINNHUB_SYMBOLS[sym];
-    if (fSym) {
-      const to = Math.floor(Date.now() / 1000);
-      const from = to - (90 * 60); // last 90 minutes
-      const url = `https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
+// Pre-fill all pair buffers in parallel via REST
+async function prefillAllBuffers(){
+  const to = Math.floor(Date.now()/1000);
+  const from = to - (90*60);
+  const fetches = ASSETS.map(async(a)=>{
+    const fSym = FINNHUB_SYMBOLS[a.sym];
+    if(!fSym) return;
+    try{
+      const url=`https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`;
       const r = await fetch(url);
-      if (r.ok) {
+      if(r.ok){
         const d = await r.json();
-        if (d.s === 'ok' && d.c && d.c.length > 20) {
-          lastDataSource = 'finnhub_rest';
-          console.log('✅ Finnhub REST:', d.c.length, 'candles for', sym);
-          return d.c.map(v => parseFloat(v)).filter(v => !isNaN(v));
+        if(d.s==='ok' && d.c && d.c.length > 5){
+          const closes = d.c.map(v=>parseFloat(v)).filter(v=>!isNaN(v));
+          // Merge: keep existing WS ticks at end, REST fills history
+          if(!priceBuffers[a.sym] || priceBuffers[a.sym].length < closes.length){
+            priceBuffers[a.sym] = closes.slice(-120);
+          }
+          // ── Step 3: Pre-calculate indicators for ALL pairs right away ──
+          if(priceBuffers[a.sym].length >= 5){
+            liveIndicators[a.sym] = confluenceAnalysisForSym(priceBuffers[a.sym], a.sym);
+            updateAssetStrength(a.sym, liveIndicators[a.sym].confluencePct);
+          }
+          if(a.sym === currentSym){
+            lastDataSource = 'finnhub_rest';
+            updateIndicatorDisplay(priceBuffers[a.sym]);
+            drawSparkline(priceBuffers[a.sym]);
+            updateTickBuf();
+          }
         }
       }
-    }
-  } catch(e) { console.log('Finnhub REST error:', e.message); }
+    }catch(e){}
+  });
+  await Promise.all(fetches);
+  // Find best pair
+  updateBestPair();
+  // Auto-generate first signal
+  if(priceBuffers[currentSym] && priceBuffers[currentSym].length >= 5){
+    generateSignal(true);
+  }
+  // Start fallback countdown (only used if WS down)
+  if(!wsReady) startCountdown();
+}
 
-  // FALLBACK: Simulated only if Finnhub completely fails
-  console.warn('Finnhub unavailable — using simulated prices');
+async function fetchRESTFill(sym){
+  const fSym = FINNHUB_SYMBOLS[sym]; if(!fSym) return;
+  const to = Math.floor(Date.now()/1000);
+  const from = to - (90*60);
+  try{
+    const r = await fetch(`https://finnhub.io/api/v1/forex/candle?symbol=${fSym}&resolution=1&from=${from}&to=${to}&token=${FINNHUB_KEY}`);
+    if(r.ok){
+      const d = await r.json();
+      if(d.s==='ok' && d.c && d.c.length > 5){
+        const closes = d.c.map(v=>parseFloat(v)).filter(v=>!isNaN(v));
+        priceBuffers[sym] = closes.slice(-120);
+        lastDataSource = 'finnhub_rest';
+        if(sym===currentSym){updateIndicatorDisplay(closes);drawSparkline(closes);updateTickBuf();}
+        return closes;
+      }
+    }
+  }catch(e){}
+  // Ultimate fallback: simulated
   lastDataSource = 'simulated';
-  return genSimPrices(sym);
+  const sim = genSimPrices(sym);
+  priceBuffers[sym] = sim;
+  return sim;
+}
+
+// ═══════════════════════════════════════════════════════
+// TICK RATE & LATENCY TRACKING
+// ═══════════════════════════════════════════════════════
+function recordTick(){
+  const now = Date.now();
+  tickTimestamps.push(now);
+  // Keep only last 10 seconds
+  tickTimestamps = tickTimestamps.filter(t => now - t < 10000);
+}
+
+function updateTickBar(){
+  // Tick rate: ticks per second over last 10s
+  const now = Date.now();
+  const recent = tickTimestamps.filter(t => now - t < 10000);
+  const rate = (recent.length / 10).toFixed(1);
+
+  const rateEl = document.getElementById('tick-rate');
+  if(rateEl){
+    rateEl.textContent = rate + '/s';
+    rateEl.className = 'tick-val ' + (parseFloat(rate) > 0.5 ? 'good' : parseFloat(rate) > 0 ? 'warn' : 'bad');
+  }
+
+  const latEl = document.getElementById('tick-lat');
+  if(latEl && wsPingTime){
+    latEl.textContent = wsPingTime + 'ms';
+    latEl.className = 'tick-val ' + (wsPingTime < 200 ? 'good' : wsPingTime < 500 ? 'warn' : 'bad');
+  }
+
+  setInterval(updateTickBar, 2000); // update every 2s — stop self-spawning
+}
+
+function updateTickBuf(){
+  const buf = priceBuffers[currentSym] ? priceBuffers[currentSym].length : 0;
+  const el = document.getElementById('tick-buf');
+  if(el){
+    el.textContent = buf + '/60';
+    el.className = 'tick-val ' + (buf >= 30 ? 'good' : buf >= 10 ? 'warn' : 'bad');
+  }
+}
+
+function setConnectionStatus(status){
+  const el = document.getElementById('tick-conn');
+  if(!el) return;
+  const map = {
+    live:{dot:'live',text:'WS LIVE',cls:'good'},
+    rest:{dot:'rest',text:'REST',cls:'warn'},
+    connecting:{dot:'rest',text:'CONNECTING',cls:'warn'},
+    reconnecting:{dot:'rest',text:'RECONN...',cls:'warn'},
+    error:{dot:'sim',text:'ERROR',cls:'bad'},
+    simulated:{dot:'sim',text:'SIM',cls:'bad'},
+  };
+  const s = map[status] || map.simulated;
+  el.innerHTML = `<span class="tick-dot ${s.dot}"></span>${s.text}`;
+  el.className = 'tick-val ' + s.cls;
+
+  const liveText = document.getElementById('badge-live-text');
+  if(liveText) liveText.textContent = status==='live' ? 'WS LIVE' : status==='rest' ? 'REST' : 'CONNECTING';
+}
+
+function startSignalAgeTimer(){
+  if(signalAgeTimer) clearInterval(signalAgeTimer);
+  signalAgeTimer = setInterval(()=>{
+    const el = document.getElementById('tick-age');
+    if(!el) return;
+    if(!lastSignalTime){el.textContent='--';el.className='tick-val bad';return;}
+    const sec = Math.round((Date.now()-lastSignalTime)/1000);
+    if(sec < 60){el.textContent=sec+'s ago';el.className='tick-val '+(sec<30?'good':'warn');}
+    else{el.textContent=Math.floor(sec/60)+'m ago';el.className='tick-val bad';}
+  },1000);
+}
+
+// Live price update on WS tick
+function updateLivePriceTick(sym, price){
+  const dec = sym.includes('JPY')?3:5;
+  const priceEl = document.getElementById('live-price');
+  const prevPrice = parseFloat(priceEl?.textContent)||price;
+  if(priceEl){
+    priceEl.textContent = price.toFixed(dec);
+    priceEl.style.color = price > prevPrice ? 'var(--accent)' : price < prevPrice ? 'var(--red)' : 'var(--accent)';
+    setTimeout(()=>{if(priceEl)priceEl.style.color='var(--accent)';},500);
+  }
+  const ds = document.getElementById('data-source-tag');
+  if(ds){
+    ds.textContent = '🔴 FINNHUB WS ✅';
+    ds.style.color='var(--accent)';ds.style.background='rgba(0,255,136,0.08)';ds.style.borderColor='rgba(0,255,136,0.2)';
+  }
+}
+
+// Update best pair display
+function updateBestPair(){
+  const scored = Object.entries(liveIndicators)
+    .filter(([,v])=>v && v.confluencePct)
+    .map(([sym,v])=>({sym,score:v.confluencePct}))
+    .sort((a,b)=>b.score-a.score);
+  if(!scored.length) return;
+  const best = scored[0];
+  const bestAsset = ASSETS.find(a=>a.sym===best.sym);
+  const bestEl=document.getElementById('best-pair'),scoreEl=document.getElementById('best-score');
+  if(bestEl) bestEl.textContent = bestAsset?.otc || best.sym;
+  if(scoreEl) scoreEl.textContent = best.score+'%';
+  ASSETS.forEach(a=>{
+    if(liveIndicators[a.sym]) updateAssetStrength(a.sym, liveIndicators[a.sym].confluencePct);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// SPARKLINE CANVAS
+// ═══════════════════════════════════════════════════════
+function drawSparkline(prices){
+  const canvas = document.getElementById('sparkline-canvas');
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.parentElement.clientWidth || 300;
+  const h = 38;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,w,h);
+
+  const slice = prices.slice(-60);
+  if(slice.length < 2) return;
+  const min = Math.min(...slice), max = Math.max(...slice);
+  const range = max - min || 1;
+  const pts = slice.map((p,i)=>({
+    x: (i/(slice.length-1))*w,
+    y: h - ((p-min)/range)*(h-4) - 2
+  }));
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  const isUp = slice[slice.length-1] >= slice[0];
+  grad.addColorStop(0, isUp ? 'rgba(0,255,136,0.18)' : 'rgba(255,51,85,0.18)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h);
+  pts.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.lineTo(pts[pts.length-1].x,h);
+  ctx.fillStyle=grad;ctx.fill();
+  // Line
+  ctx.beginPath();
+  pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle = isUp ? '#00ff88' : '#ff3355';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Last dot
+  const last=pts[pts.length-1];
+  ctx.beginPath();ctx.arc(last.x,last.y,3,0,Math.PI*2);
+  ctx.fillStyle = isUp ? '#00ff88' : '#ff3355';ctx.fill();
+}
+
+// ═══════════════════════════════════════════════════════
+// INDICATORS (unchanged logic, just extracted)
+// ═══════════════════════════════════════════════════════
+function calcMA(prices,period){if(prices.length<period)return null;const s=prices.slice(-period);return s.reduce((a,b)=>a+b,0)/period;}
+function calcEMA(prices,period){if(prices.length<period)return null;const k=2/(period+1);let ema=prices.slice(0,period).reduce((a,b)=>a+b,0)/period;for(let i=period;i<prices.length;i++)ema=prices[i]*k+ema*(1-k);return ema;}
+function calcRSI(prices,period=14){if(prices.length<period+1)return null;const s=prices.slice(-(period+1));let g=0,l=0;for(let i=1;i<s.length;i++){const d=s[i]-s[i-1];if(d>0)g+=d;else l+=Math.abs(d);}const ag=g/period,al=l/period;if(al===0)return 100;return parseFloat((100-(100/(1+ag/al))).toFixed(2));}
+function calcMACD(prices){if(prices.length<26)return null;const ema12=calcEMA(prices,12),ema26=calcEMA(prices,26);if(!ema12||!ema26)return null;return parseFloat((ema12-ema26).toFixed(6));}
+function calcStochastic(prices,period=14){if(prices.length<period)return null;const s=prices.slice(-period);const low=Math.min(...s),high=Math.max(...s),cur=prices[prices.length-1];if(high===low)return 50;return parseFloat(((cur-low)/(high-low)*100).toFixed(2));}
+function calcBollinger(prices,period=20){if(prices.length<period)return null;const s=prices.slice(-period);const mean=s.reduce((a,b)=>a+b,0)/period;const std=Math.sqrt(s.reduce((a,b)=>a+(b-mean)**2,0)/period);return{upper:mean+2*std,middle:mean,lower:mean-2*std,std};}
+function detectCandlePattern(prices){
+  if(prices.length<3)return null;
+  const[p2,p1,cur]=prices.slice(-3);
+  const body=Math.abs(cur-p1),prevBody=Math.abs(p1-p2);
+  const isGreen=cur>p1,prevGreen=p1>p2;
+  if(body<prevBody*0.1)return{name:'Doji',icon:'⊕',desc:'Indecision — potential reversal',signal:'neutral'};
+  if(isGreen&&!prevGreen&&cur>p2&&body>prevBody*0.8)return{name:'Bullish Engulfing',icon:'🟢',desc:'Strong reversal signal — CALL',signal:'bull'};
+  if(!isGreen&&prevGreen&&cur<p2&&body>prevBody*0.8)return{name:'Bearish Engulfing',icon:'🔴',desc:'Strong reversal signal — PUT',signal:'bear'};
+  if(isGreen&&!prevGreen&&body>prevBody*0.5)return{name:'Hammer',icon:'🔨',desc:'Bullish reversal — CALL',signal:'bull'};
+  if(!isGreen&&prevGreen&&body>prevBody*0.5)return{name:'Shooting Star',icon:'⭐',desc:'Bearish reversal — PUT',signal:'bear'};
+  if(isGreen&&prevGreen)return{name:'Bullish Momentum',icon:'📈',desc:'Strong upward momentum',signal:'bull'};
+  return null;
 }
 function genSimPrices(sym){
   const bases={EURUSD:1.085,GBPUSD:1.265,EURJPY:162.5,USDJPY:149.8,AUDUSD:0.652,USDCAD:1.358,GBPJPY:189.5,EURGBP:0.858};
-  const base=bases[sym]||1;
-  const prices=[];let p=base*(0.998+Math.random()*0.004);
+  const base=bases[sym]||1;const prices=[];let p=base*(0.998+Math.random()*0.004);
   for(let i=0;i<60;i++){p+=(Math.random()-0.495)*base*0.0008;prices.push(parseFloat(p.toFixed(sym.includes('JPY')?3:5)));}
   return prices;
 }
 
-// ═══════════════════════════════
-// INDICATORS
-// ═══════════════════════════════
-function calcMA(prices,period){
-  if(prices.length<period) return null;
-  const s=prices.slice(-period);return s.reduce((a,b)=>a+b,0)/period;
-}
-function calcEMA(prices,period){
-  if(prices.length<period) return null;
-  const k=2/(period+1);let ema=prices.slice(0,period).reduce((a,b)=>a+b,0)/period;
-  for(let i=period;i<prices.length;i++) ema=prices[i]*k+ema*(1-k);
-  return ema;
-}
-function calcRSI(prices,period=14){
-  if(prices.length<period+1) return null;
-  const s=prices.slice(-(period+1));let g=0,l=0;
-  for(let i=1;i<s.length;i++){const d=s[i]-s[i-1];if(d>0)g+=d;else l+=Math.abs(d);}
-  const ag=g/period,al=l/period;
-  if(al===0) return 100;
-  return parseFloat((100-(100/(1+ag/al))).toFixed(2));
-}
-function calcMACD(prices){
-  if(prices.length<26) return null;
-  const ema12=calcEMA(prices,12),ema26=calcEMA(prices,26);
-  if(!ema12||!ema26) return null;
-  return parseFloat((ema12-ema26).toFixed(6));
-}
-function calcStochastic(prices,period=14){
-  if(prices.length<period) return null;
-  const s=prices.slice(-period);
-  const low=Math.min(...s),high=Math.max(...s),cur=prices[prices.length-1];
-  if(high===low) return 50;
-  return parseFloat(((cur-low)/(high-low)*100).toFixed(2));
-}
-function calcBollinger(prices,period=20){
-  if(prices.length<period) return null;
-  const s=prices.slice(-period);
-  const mean=s.reduce((a,b)=>a+b,0)/period;
-  const std=Math.sqrt(s.reduce((a,b)=>a+(b-mean)**2,0)/period);
-  return {upper:mean+2*std,middle:mean,lower:mean-2*std,std};
-}
-function detectCandlePattern(prices){
-  if(prices.length<3) return null;
-  const [p2,p1,cur]=prices.slice(-3);
-  const body=Math.abs(cur-p1);const prevBody=Math.abs(p1-p2);
-  const isGreen=cur>p1,prevGreen=p1>p2;
-  if(body<prevBody*0.1){return{name:'Doji',icon:'⊕',desc:'Indecision — potential reversal',signal:'neutral'};}
-  if(isGreen&&!prevGreen&&cur>p2&&body>prevBody*0.8){return{name:'Bullish Engulfing',icon:'🟢',desc:'Strong reversal signal — CALL',signal:'bull'};}
-  if(!isGreen&&prevGreen&&cur<p2&&body>prevBody*0.8){return{name:'Bearish Engulfing',icon:'🔴',desc:'Strong reversal signal — PUT',signal:'bear'};}
-  if(isGreen&&!prevGreen&&body>prevBody*0.5){return{name:'Hammer',icon:'🔨',desc:'Bullish reversal — CALL',signal:'bull'};}
-  if(!isGreen&&prevGreen&&body>prevBody*0.5){return{name:'Shooting Star',icon:'⭐',desc:'Bearish reversal — PUT',signal:'bear'};}
-  if(isGreen&&prevGreen&&!prices[prices.length-4]||cur>prices[prices.length-4]){return{name:'Bullish Momentum',icon:'📈',desc:'Strong upward momentum',signal:'bull'};}
-  return null;
+// ═══════════════════════════════════════════════════════
+// ── UPGRADED: CONFLUENCE ENGINE ──
+// Now accepts sym as parameter so it can be called for any pair
+// ═══════════════════════════════════════════════════════
+function confluenceAnalysisForSym(prices, sym){
+  // Swap currentSym/currentOTC context
+  const savedSym = currentSym, savedOTC = currentOTC;
+  const asset = ASSETS.find(a=>a.sym===sym);
+  currentSym = sym;
+  currentOTC = asset ? asset.otc : sym;
+  const result = confluenceAnalysis(prices);
+  currentSym = savedSym;
+  currentOTC = savedOTC;
+  return result;
 }
 
-// ═══════════════════════════════
-// CONFLUENCE ENGINE
-// ═══════════════════════════════
 function confluenceAnalysis(prices){
   const dec=currentSym.includes('JPY')?3:5;
   const cur=prices[prices.length-1];
@@ -1046,126 +1173,150 @@ function confluenceAnalysis(prices){
   let bullVotes=0,bearVotes=0;
   const signals=[];
 
-  // MA 20
   if(ma20){if(cur>ma20){bullVotes+=1;signals.push({name:'MA20',dir:'bull'});}else{bearVotes+=1;signals.push({name:'MA20',dir:'bear'});}}
-  // MA 50
   if(ma50){if(cur>ma50){bullVotes+=1;signals.push({name:'MA50',dir:'bull'});}else{bearVotes+=1;signals.push({name:'MA50',dir:'bear'});}}
-  // MA Cross
   if(ma20&&ma50){if(ma20>ma50){bullVotes+=1;signals.push({name:'MA Cross',dir:'bull'});}else{bearVotes+=1;signals.push({name:'MA Cross',dir:'bear'});}}
-  // RSI
   if(rsi!==null){
     if(rsi<35){bullVotes+=2;signals.push({name:'RSI OS',dir:'bull'});}
     else if(rsi>65){bearVotes+=2;signals.push({name:'RSI OB',dir:'bear'});}
     else if(rsi<50){bearVotes+=1;signals.push({name:'RSI',dir:'bear'});}
     else{bullVotes+=1;signals.push({name:'RSI',dir:'bull'});}
   }
-  // MACD
   if(macd!==null){if(macd>0){bullVotes+=1;signals.push({name:'MACD',dir:'bull'});}else{bearVotes+=1;signals.push({name:'MACD',dir:'bear'});}}
-  // Stochastic
   if(stoch!==null){
     if(stoch<20){bullVotes+=1;signals.push({name:'STOCH',dir:'bull'});}
     else if(stoch>80){bearVotes+=1;signals.push({name:'STOCH',dir:'bear'});}
     else if(stoch<50){bearVotes+=1;signals.push({name:'STOCH',dir:'neutral'});}
     else{bullVotes+=1;signals.push({name:'STOCH',dir:'neutral'});}
   }
-  // Bollinger
   if(boll){
     if(cur<boll.lower){bullVotes+=1;signals.push({name:'BB',dir:'bull'});}
     else if(cur>boll.upper){bearVotes+=1;signals.push({name:'BB',dir:'bear'});}
-    else{signals.push({name:'BB',dir:'neutral'});}
+    else signals.push({name:'BB',dir:'neutral'});
   }
-  // EMA
   if(ema9){if(cur>ema9){bullVotes+=1;signals.push({name:'EMA9',dir:'bull'});}else{bearVotes+=1;signals.push({name:'EMA9',dir:'bear'});}}
-  // Candle pattern
   if(pattern){
     if(pattern.signal==='bull'){bullVotes+=2;signals.push({name:pattern.name,dir:'bull'});}
     else if(pattern.signal==='bear'){bearVotes+=2;signals.push({name:pattern.name,dir:'bear'});}
   }
-  // Momentum
-  if(prices.length>=5){const mom=prices[prices.length-1]-prices[prices.length-5];if(mom>0){bullVotes+=1;}else{bearVotes+=1;}}
+  if(prices.length>=5){const mom=prices[prices.length-1]-prices[prices.length-5];if(mom>0)bullVotes+=1;else bearVotes+=1;}
 
   const total=bullVotes+bearVotes;
   const direction=bullVotes>=bearVotes?'CALL':'PUT';
   const isCall=direction==='CALL';
   const dominantVotes=isCall?bullVotes:bearVotes;
   const confluencePct=Math.round((dominantVotes/total)*100);
-
-  // Confidence based on confluence
   let confidence=Math.min(Math.max(58+confluencePct*0.35+Math.floor(Math.random()*5),60),94);
 
-  // Strength label
   let strength,strengthClass;
-  const dominantV = isCall ? bullVotes : bearVotes;
-  if(dominantV>=9){strength='VERY STRONG 🔥';strengthClass='very-strong';}
-  else if(dominantV>=8){strength='STRONG ✅';strengthClass='strong';}
-  else if(dominantV>=7){strength='MODERATE ⚡';strengthClass='moderate';}
+  if(dominantVotes>=9){strength='VERY STRONG 🔥';strengthClass='very-strong';}
+  else if(dominantVotes>=8){strength='STRONG ✅';strengthClass='strong';}
+  else if(dominantVotes>=7){strength='MODERATE ⚡';strengthClass='moderate';}
   else{strength='WEAK ⚠️ — SKIP';strengthClass='weak';}
 
-  // Trend
   let trend='SIDE';
   if(ma20&&ma50){if(ma20>ma50&&cur>ma20)trend='BULL';else if(ma20<ma50&&cur<ma20)trend='BEAR';}
-
-  // RSI state
   let rsiState='NEUTRAL';
   if(rsi!==null){if(rsi<30)rsiState='OVERSOLD';else if(rsi>70)rsiState='OVERBOUGHT';else if(rsi<45)rsiState='BEARISH';else if(rsi>55)rsiState='BULLISH';}
-
   const risk=confidence>=82?'LOW':confidence>=72?'MEDIUM':'HIGH';
-
   const reasons=signals.filter(s=>s.dir===(isCall?'bull':'bear')).slice(0,4).map(s=>`${s.name} confirms ${direction} direction`);
   if(pattern&&pattern.signal===(isCall?'bull':'bear'))reasons.unshift(`${pattern.name} pattern detected — ${isCall?'bullish':'bearish'} reversal`);
   if(reasons.length<3)reasons.push(isCall?'Price momentum supports upward move':'Price momentum supports downward move');
-
   const analysis=isCall
-    ?`${currentOTC} showing strong bullish confluence. ${bullVotes} out of ${total} indicators confirm CALL direction. ${ma20&&ma50?'Price above both MA20 and MA50.':''} ${rsi?'RSI at '+rsi.toFixed(1)+' — '+rsiState+'.':''} ${macd?'MACD positive.':''}`
-    :`${currentOTC} showing strong bearish confluence. ${bearVotes} out of ${total} indicators confirm PUT direction. ${ma20&&ma50?'Price below MA20 and MA50.':''} ${rsi?'RSI at '+rsi.toFixed(1)+' — '+rsiState+'.':''} ${macd?'MACD negative.':''}`;
+    ?`${currentOTC} showing bullish confluence. ${bullVotes}/${total} indicators confirm CALL. ${rsi?'RSI at '+rsi.toFixed(1)+' — '+rsiState+'.':''} ${macd?'MACD positive.':''}`
+    :`${currentOTC} showing bearish confluence. ${bearVotes}/${total} indicators confirm PUT. ${rsi?'RSI at '+rsi.toFixed(1)+' — '+rsiState+'.':''} ${macd?'MACD negative.':''}`;
 
-  // Trend strength filter — check last 3 candles moving same direction
-  let trendConfirmed = false;
-  if(prices.length >= 4){
-    const last3 = prices.slice(-4);
-    const allUp = last3[1]>last3[0] && last3[2]>last3[1] && last3[3]>last3[2];
-    const allDown = last3[1]<last3[0] && last3[2]<last3[1] && last3[3]<last3[2];
-    if(isCall && allUp) trendConfirmed = true;
-    if(!isCall && allDown) trendConfirmed = true;
-    if(trendConfirmed) confidence = Math.min(confidence + 3, 95);
+  // Trend filter
+  let trendConfirmed=false;
+  if(prices.length>=4){
+    const last3=prices.slice(-4);
+    const allUp=last3[1]>last3[0]&&last3[2]>last3[1]&&last3[3]>last3[2];
+    const allDown=last3[1]<last3[0]&&last3[2]<last3[1]&&last3[3]<last3[2];
+    if(isCall&&allUp)trendConfirmed=true;
+    if(!isCall&&allDown)trendConfirmed=true;
+    if(trendConfirmed)confidence=Math.min(confidence+3,95);
   }
+  // Candle body filter
+  const lastCandle=prices[prices.length-1];
+  const prevCandle=prices[prices.length-2]||lastCandle;
+  const bodySize=Math.abs(lastCandle-prevCandle);
+  const avgMove=prices.slice(-10).reduce((acc,p,i,arr)=>i===0?0:acc+Math.abs(p-arr[i-1]),0)/9;
+  const isStrongCandle=bodySize>=avgMove*0.5;
+  if(!isStrongCandle&&confidence>75)confidence-=5;
 
-  // Candle body size filter — check last candle is not a doji
-  const lastCandle = prices[prices.length-1];
-  const prevCandle = prices[prices.length-2] || lastCandle;
-  const bodySize = Math.abs(lastCandle - prevCandle);
-  const avgMove = prices.slice(-10).reduce((acc,p,i,arr)=>i===0?0:acc+Math.abs(p-arr[i-1]),0)/9;
-  const isStrongCandle = bodySize >= avgMove * 0.5;
-  if(!isStrongCandle && confidence > 75) confidence -= 5;
-
-  return {
-    direction,confidence,strength,strengthClass,trend,rsiState,risk,
+  return{direction,confidence,strength,strengthClass,trend,rsiState,risk,
     reasons,analysis,signals,bullVotes,bearVotes,total,confluencePct,
     pattern,ma20,ma50,rsi,macd,stoch,boll,ema9,cur,dec,
-    isValidSignal,trendConfirmed,isStrongCandle
-  };
+    isValidSignal:true,trendConfirmed,isStrongCandle};
 }
 
-// ═══════════════════════════════
-// FETCH & ANALYZE
-// ═══════════════════════════════
-async function fetchAndAnalyze(sym){
-  sym=sym||currentSym;
+// ═══════════════════════════════════════════════════════
+// GENERATE SIGNAL (now uses pre-calculated data)
+// ═══════════════════════════════════════════════════════
+async function generateSignal(silent=false){
+  const btn=document.getElementById('btn-gen');
+  if(!silent&&btn){btn.disabled=true;btn.innerHTML='<div class="shimmer"></div><span class="spinner"></span> ANALYSING...';}
+
+  const alerts=[];
+  if(!isHosted) alerts.push({type:'warn',msg:'⚠️ <strong>Open from GitHub Pages</strong> for live WebSocket data.'});
+  const h=getWAT().getHours();
+  if(h>=10&&h<14) alerts.push({type:'warn',msg:'⚠️ <strong>Slow zone!</strong> 10am-2pm WAT — OTC choppy.'});
+  if(h<7||h>=21) alerts.push({type:'danger',msg:'🌙 <strong>Avoid trading!</strong> Very unpredictable at this hour.'});
+  const wat=getWAT();const wh=wat.getHours(),wm=wat.getMinutes(),wd=wat.getDay();
+  for(const e of NEWS_EVENTS){if(!e.days.includes(wd))continue;const diff=(e.hour*60+e.min)-(wh*60+wm);if(diff>=0&&diff<=15)alerts.push({type:'danger',msg:`🚨 <strong>News in ${diff}min: ${e.name}</strong> — Consider skipping!`});}
+  let streak=0;for(const e of signalLog.slice(0,5)){if(e.result==='loss')streak++;else break;}
+  if(streak>=2) alerts.push({type:'warn',msg:`🛑 <strong>${streak} losses in a row.</strong> Consider taking a break.`});
+
+  // ── UPGRADED: use pre-calculated result if available, else compute now ──
+  let prices = priceBuffers[currentSym];
+  let result = liveIndicators[currentSym]; // instant — no recalc needed!
+
+  if(!prices || prices.length < 5){
+    prices = await fetchRESTFill(currentSym);
+  }
+  if(!result || !result.direction){
+    // Not pre-calc yet — run now
+    if(prices && prices.length >= 5) result = confluenceAnalysis(prices);
+  }
+  if(!result) result = generateFallbackSignal(prices || genSimPrices(currentSym));
+
+  updateIndicatorDisplay(prices || priceBuffers[currentSym] || []);
+  if(prices) drawSparkline(prices);
+
+  try{updateConfluenceDisplay(result);}catch(e){}
+  try{updateCandlePatternDisplay(result);}catch(e){}
+  try{updateIndicatorAgreement(result);}catch(e){}
+  try{renderSignalOutput(result);}catch(e){console.log('Render error:',e);}
+
+  if(btn){btn.disabled=false;btn.innerHTML='<div class="shimmer"></div>⚡ GENERATE SIGNAL';}
   try{
-    // Always fetch fresh — never use wrong cached data
-    let prices = await fetchPrice(sym);
-    if (!prices || prices.length < 5) return null;
-    priceBuffers[sym] = prices; // Cache fresh data
-    priceHistory[sym] = prices;
-    if(sym===currentSym) updateIndicatorDisplay(prices);
-    const result=confluenceAnalysis.call({currentSym:sym,currentOTC:currentOTC},prices);
-    assetScores[sym]=result.confluencePct;
-    updateAssetStrength(sym,result.confluencePct);
-    return result;
-  }catch(e){console.log('fetchAndAnalyze error:',e);return null;}
+    const alertsDiv=document.getElementById('smart-alerts');
+    if(alertsDiv)alertsDiv.innerHTML=alerts.map(a=>`<div class="alert-box ${a.type}">${a.msg}</div>`).join('');
+  }catch(e){}
+
+  // Update signal age
+  lastSignalTime = Date.now();
+
+  return result;
 }
 
-function updateIndicatorDisplay(prices, source){
+function generateFallbackSignal(prices){
+  const cur=prices[prices.length-1],prev=prices[prices.length-6]||cur;
+  const direction=cur>=prev?'CALL':'PUT',isCall=direction==='CALL';
+  const dec=currentSym.includes('JPY')?3:5,ma20=calcMA(prices,20)||cur,rsi=calcRSI(prices,14)||50;
+  return{direction,confidence:68,strength:'MODERATE ⚡',strengthClass:'moderate',trend:cur>ma20?'BULL':'BEAR',rsiState:'NEUTRAL',risk:'MEDIUM',
+    reasons:[`${direction==='CALL'?'Bullish':'Bearish'} momentum on current timeframe`,`Price ${cur>ma20?'above':'below'} MA 20`,`RSI at ${rsi.toFixed(1)}`],
+    analysis:`${currentOTC} showing ${direction==='CALL'?'bullish':'bearish'} momentum. Price at ${cur.toFixed(dec)}.`,
+    signals:[{name:'MA20',dir:cur>ma20?'bull':'bear'},{name:'RSI',dir:rsi<50?'bear':'bull'},{name:'Momentum',dir:direction==='CALL'?'bull':'bear'}],
+    bullVotes:direction==='CALL'?6:3,bearVotes:direction==='PUT'?6:3,total:9,confluencePct:67,
+    pattern:null,ma20,ma50:calcMA(prices,50)||cur,rsi,macd:null,stoch:null,boll:null,ema9:null,cur,dec,isValidSignal:true,trendConfirmed:false,isStrongCandle:true};
+}
+
+// ═══════════════════════════════════════════════════════
+// UI UPDATE HELPERS
+// ═══════════════════════════════════════════════════════
+function updateIndicatorDisplay(prices){
+  if(!prices||prices.length<2)return;
   const dec=currentSym.includes('JPY')?3:5;
   const cur=prices[prices.length-1],prev=prices[prices.length-2]||cur;
   const chg=((cur-prev)/prev*100);
@@ -1173,30 +1324,20 @@ function updateIndicatorDisplay(prices, source){
   const ce=document.getElementById('price-chg');
   ce.textContent=(chg>=0?'+':'')+chg.toFixed(4)+'%';
   ce.className='price-chg '+(chg>=0?'up':'down');
-  // Show data source
   const ds=document.getElementById('data-source-tag');
   if(ds){
-    if(lastDataSource==='finnhub_rest'){
-      ds.textContent='🟢 FINNHUB LIVE ✅';
-      ds.style.color='var(--accent)';
-      ds.style.background='rgba(0,255,136,0.08)';
-      ds.style.borderColor='rgba(0,255,136,0.2)';
-    } else if(lastDataSource==='error'){
-      ds.textContent='CHECK API KEY ❌';
-      ds.style.color='var(--red)';
-      ds.style.background='rgba(255,51,85,0.06)';
-      ds.style.borderColor='rgba(255,51,85,0.15)';
-    } else {
-      ds.textContent='SIMULATED ❌';
-      ds.style.color='var(--red)';
-      ds.style.background='rgba(255,51,85,0.06)';
-      ds.style.borderColor='rgba(255,51,85,0.15)';
+    if(lastDataSource==='finnhub'||lastDataSource==='finnhub_rest'){
+      ds.textContent=lastDataSource==='finnhub'?'🔴 FINNHUB WS ✅':'🟡 FINNHUB REST';
+      ds.style.color=lastDataSource==='finnhub'?'var(--accent)':'var(--gold)';
+      ds.style.background=lastDataSource==='finnhub'?'rgba(0,255,136,0.08)':'rgba(255,215,64,0.08)';
+      ds.style.borderColor=lastDataSource==='finnhub'?'rgba(0,255,136,0.2)':'rgba(255,215,64,0.15)';
+    }else{
+      ds.textContent='SIMULATED ❌';ds.style.color='var(--red)';
+      ds.style.background='rgba(255,51,85,0.06)';ds.style.borderColor='rgba(255,51,85,0.15)';
     }
   }
-
   const ma20=calcMA(prices,20),ma50=calcMA(prices,50);
   const rsi=calcRSI(prices,14),macd=calcMACD(prices),stoch=calcStochastic(prices,14);
-
   if(ma20){const a=cur>ma20;document.getElementById('i-ma20').textContent=ma20.toFixed(dec);document.getElementById('i-ma20').className='ind-val '+(a?'bull':'bear');document.getElementById('s-ma20').textContent=a?'▲ ABOVE':'▼ BELOW';}
   if(ma50){const a=cur>ma50;document.getElementById('i-ma50').textContent=ma50.toFixed(dec);document.getElementById('i-ma50').className='ind-val '+(a?'bull':'bear');document.getElementById('s-ma50').textContent=a?'▲ ABOVE':'▼ BELOW';}
   if(rsi!==null){document.getElementById('i-rsi').textContent=rsi.toFixed(1);document.getElementById('i-rsi').className='ind-val '+(rsi>70?'bear':rsi<30?'bull':'neutral');document.getElementById('s-rsi').textContent=rsi>70?'OVERBOUGHT':rsi<30?'OVERSOLD':'NEUTRAL';}
@@ -1204,256 +1345,57 @@ function updateIndicatorDisplay(prices, source){
   if(stoch!==null){document.getElementById('i-stoch').textContent=stoch.toFixed(0);document.getElementById('i-stoch').className='ind-val '+(stoch>80?'bear':stoch<20?'bull':'neutral');document.getElementById('s-stoch').textContent=stoch>80?'OVERBOUGHT':stoch<20?'OVERSOLD':'NEUTRAL';}
 }
 
-function updateAssetStrength(sym,score){
-  const el=document.getElementById('str-'+sym);
-  if(!el) return;
-  el.className='strength '+(score>=70?'strong':score>=55?'medium':'weak');
-}
-
-// ═══════════════════════════════
-// FETCH ALL ASSETS
-// ═══════════════════════════════
-async function fetchAllAndAnalyze(){
-  const cdEl = document.getElementById('auto-cd');
-  if(cdEl) cdEl.innerHTML='<span class="spinner"></span> Scanning...';
-
-  // Fetch all pairs with 8 second timeout protection
-  const fetchWithTimeout = async (a) => {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(()=>controller.abort(), 8000);
-      const prices = await fetchPrice(a.sym);
-      clearTimeout(timer);
-      if (!prices || prices.length < 5) return {sym:a.sym,score:0,otc:a.otc};
-      priceBuffers[a.sym] = prices;
-      priceHistory[a.sym] = prices;
-      const score = analyzeForScore(prices, a.sym);
-      assetScores[a.sym] = score;
-      updateAssetStrength(a.sym, score);
-      return {sym:a.sym, score, otc:a.otc, prices};
-    } catch(e) {
-      return {sym:a.sym,score:0,otc:a.otc};
-    }
-  };
-
-  const results = await Promise.all(ASSETS.map(fetchWithTimeout));
-
-  // Find best pair by score
-  const sorted = results.filter(r=>r.score>0).sort((a,b)=>b.score-a.score);
-  const best = sorted[0];
-
-  if (best) {
-    const bestAsset = ASSETS.find(a=>a.sym===best.sym);
-    const bestEl = document.getElementById('best-pair');
-    const scoreEl = document.getElementById('best-score');
-    if(bestEl) bestEl.textContent = bestAsset?.otc || best.otc;
-    if(scoreEl) scoreEl.textContent = best.score+'%';
-
-    // Auto-switch to best pair chip
-    document.querySelectorAll('.asset-chip').forEach(c=>{
-      c.classList.toggle('active', c.dataset.sym === best.sym);
-    });
-
-    currentSym = best.sym;
-    currentOTC = bestAsset?.otc || best.otc;
-    const lbl = document.getElementById('live-asset-lbl');
-    if(lbl) lbl.textContent = bestAsset?.label || best.sym;
-
-    if (priceBuffers[best.sym]) {
-      updateIndicatorDisplay(priceBuffers[best.sym]);
-    }
-  }
-
-  // Generate signal — always show result regardless of confluence level
-  // User will be warned if signal is weak
-  try {
-    await generateSignal(true);
-  } catch(e) {
-    console.log('Signal gen error:', e);
-  }
-
-  startCountdown();
-}
-
-function analyzeForScore(prices,sym){
-  let bull=0,bear=0;
-  const cur=prices[prices.length-1];
-  const ma20=calcMA(prices,20),ma50=calcMA(prices,50),rsi=calcRSI(prices,14),macd=calcMACD(prices);
-  if(ma20){if(cur>ma20)bull++;else bear++;}
-  if(ma50){if(cur>ma50)bull++;else bear++;}
-  if(ma20&&ma50){if(ma20>ma50)bull++;else bear++;}
-  if(rsi!==null){if(rsi<40)bull+=2;else if(rsi>60)bear+=2;}
-  if(macd!==null){if(macd>0)bull++;else bear++;}
-  const total=bull+bear;
-  return total>0?Math.round((Math.max(bull,bear)/total)*100):50;
-}
-
-// ═══════════════════════════════
-// GENERATE SIGNAL
-// ═══════════════════════════════
-async function generateSignal(silent=false){
-  const btn=document.getElementById('btn-gen');
-  if(!silent){
-    btn.disabled=true;
-    btn.innerHTML='<div class="shimmer"></div><span class="spinner"></span> ANALYSING...';
-  }
-
-  // Smart alerts
-  const alerts=[];
-
-  // Warn if not hosted
-  if(!isHosted){
-    alerts.push({type:'warn', msg:'⚠️ <strong>Open from GitHub Pages</strong> for live Finnhub data. Currently using simulated prices.'});
-  }
-  const h=getWAT().getHours();
-  if(h>=10&&h<14) alerts.push({type:'warn',msg:'⚠️ <strong>Slow zone!</strong> 10am-2pm WAT — OTC choppy. Best: 7-10am or 2-6pm.'});
-  if(h<7||h>=21) alerts.push({type:'danger',msg:'🌙 <strong>Avoid trading!</strong> Very unpredictable at this hour.'});
-
-  // Check news
-  const wat=getWAT();const wh=wat.getHours(),wm=wat.getMinutes(),wd=wat.getDay();
-  for(const e of NEWS_EVENTS){
-    if(!e.days.includes(wd)) continue;
-    const diff=(e.hour*60+e.min)-(wh*60+wm);
-    if(diff>=0&&diff<=15) alerts.push({type:'danger',msg:`🚨 <strong>News in ${diff}min: ${e.name}</strong> — Consider skipping this trade!`});
-  }
-
-  // Streak check
-  let streak=0;
-  for(const e of signalLog.slice(0,5)){if(e.result==='loss')streak++;else break;}
-  if(streak>=2) alerts.push({type:'warn',msg:`🛑 <strong>${streak} losses in a row.</strong> Consider taking a break.`});
-
-  // Alerts shown after signal renders — moved to end of function
-
-  // Get prices — use cached buffer first
-  let prices = priceBuffers[currentSym] || priceHistory[currentSym];
-  if(!prices || prices.length < 10){
-    prices = await fetchPrice(currentSym);
-    priceBuffers[currentSym] = prices;
-    priceHistory[currentSym] = prices;
-  }
-  if(!prices || prices.length < 5){
-    if(!silent){
-      btn.disabled=false;
-      btn.innerHTML='<div class="shimmer"></div>⚡ GENERATE SIGNAL';
-    }
-    document.getElementById('smart-alerts').innerHTML='<div class="alert-box danger">⚠️ Could not fetch price data. Check internet and try again.</div>';
-    return;
-  }
-  updateIndicatorDisplay(prices);
-
-  // Run confluence analysis with full error protection
-  let result = null;
-  try {
-    result = confluenceAnalysis(prices);
-  } catch(e){
-    console.log('Confluence error:', e);
-    result = generateFallbackSignal(prices);
-  }
-
-  if(!result){
-    result = generateFallbackSignal(prices);
-  }
-
-  // Update confluence display safely
-  try { updateConfluenceDisplay(result); } catch(e){}
-
-  // Candle pattern safely
-  try {
-    const cpEl = document.getElementById('candle-pattern');
-    if(cpEl){
-      if(result.pattern){
-        cpEl.style.display='flex';
-        const ci=document.getElementById('cp-icon');
-        const cn=document.getElementById('cp-name');
-        const cd=document.getElementById('cp-desc');
-        if(ci) ci.textContent=result.pattern.icon;
-        if(cn) cn.textContent=result.pattern.name;
-        if(cd) cd.textContent=result.pattern.desc;
-      } else {
-        cpEl.style.display='none';
-      }
-    }
-  } catch(e){}
-
-  // Indicator tags safely
-  try {
-    const agrDiv=document.getElementById('ind-agreement');
-    if(agrDiv && result.signals){
-      agrDiv.innerHTML=result.signals.map(s=>`<div class="ind-tag agree-${s.dir}">${s.dir==='bull'?'↑':s.dir==='bear'?'↓':'→'} ${s.name}</div>`).join('');
-    }
-  } catch(e){}
-
-  // Render signal output
-  try { renderSignalOutput(result); } catch(e){ console.log('Render error:',e); }
-
-  // Reset button always
-  if(btn){
-    btn.disabled=false;
-    btn.innerHTML='<div class="shimmer"></div>⚡ GENERATE SIGNAL';
-  }
-
-  // Show alerts
-  try {
-    const alertsDiv=document.getElementById('smart-alerts');
-    if(alertsDiv) alertsDiv.innerHTML=alerts.map(a=>`<div class="alert-box ${a.type}">${a.msg}</div>`).join('');
-  } catch(e){}
-
-  return result;
-}
-
-// Fallback signal when confluenceAnalysis fails
-function generateFallbackSignal(prices){
-  const cur = prices[prices.length-1];
-  const prev = prices[prices.length-6] || cur;
-  const direction = cur >= prev ? 'CALL' : 'PUT';
-  const isCall = direction === 'CALL';
-  const dec = currentSym.includes('JPY') ? 3 : 5;
-  const ma20 = calcMA(prices,20) || cur;
-  const rsi = calcRSI(prices,14) || 50;
-  return {
-    direction, confidence:68, strength:'MODERATE ⚡', strengthClass:'moderate',
-    trend: cur > ma20 ? 'BULL' : 'BEAR', rsiState:'NEUTRAL', risk:'MEDIUM',
-    reasons:[
-      `${direction === 'CALL' ? 'Bullish' : 'Bearish'} momentum on current timeframe`,
-      `Price ${cur > ma20 ? 'above' : 'below'} MA 20 — trend ${cur > ma20 ? 'up' : 'down'}`,
-      `RSI at ${rsi.toFixed(1)} — ${rsi < 30 ? 'oversold' : rsi > 70 ? 'overbought' : 'neutral'}`
-    ],
-    analysis:`${currentOTC} showing ${direction === 'CALL' ? 'bullish' : 'bearish'} momentum. Price at ${cur.toFixed(dec)}.`,
-    signals:[
-      {name:'MA20', dir: cur > ma20 ? 'bull' : 'bear'},
-      {name:'RSI', dir: rsi < 50 ? 'bear' : 'bull'},
-      {name:'Momentum', dir: direction === 'CALL' ? 'bull' : 'bear'}
-    ],
-    bullVotes: direction === 'CALL' ? 6 : 3,
-    bearVotes: direction === 'PUT' ? 6 : 3,
-    total:9, confluencePct:67,
-    pattern:null, ma20, ma50:calcMA(prices,50)||cur,
-    rsi, macd:null, stoch:null, boll:null, ema9:null,
-    cur, dec, isValidSignal:true, trendConfirmed:false, isStrongCandle:true
-  };
-}
-
 function updateConfluenceDisplay(result){
-  if(!result) return;
-  const mv=document.getElementById('conf-meter-val');
-  const mf=document.getElementById('conf-meter-fill');
-  const sb=document.getElementById('sig-strength-badge');
-
+  if(!result)return;
+  const mv=document.getElementById('conf-meter-val'),mf=document.getElementById('conf-meter-fill'),sb=document.getElementById('sig-strength-badge');
   if(mv){mv.textContent=result.confidence+'%';mv.className='conf-meter-val '+(result.strengthClass||'weak');}
-  setTimeout(()=>{
-    if(mf){
-      mf.style.width=(result.confluencePct||50)+'%';
-      mf.style.background=result.strengthClass==='very-strong'?'var(--accent)':result.strengthClass==='strong'?'#88ff44':result.strengthClass==='moderate'?'var(--gold)':'var(--red)';
-    }
-  },100);
+  setTimeout(()=>{if(mf){mf.style.width=(result.confluencePct||50)+'%';mf.style.background=result.strengthClass==='very-strong'?'var(--accent)':result.strengthClass==='strong'?'#88ff44':result.strengthClass==='moderate'?'var(--gold)':'var(--red)';}},100);
   if(sb){sb.textContent=result.strength||'Analysing...';sb.className='signal-strength-badge ssb-'+(result.strengthClass||'weak');}
 }
 
-// ═══════════════════════════════
+function updateCandlePatternDisplay(result){
+  const cpEl=document.getElementById('candle-pattern');if(!cpEl)return;
+  if(result&&result.pattern){
+    cpEl.style.display='flex';
+    const ci=document.getElementById('cp-icon'),cn=document.getElementById('cp-name'),cd=document.getElementById('cp-desc');
+    if(ci)ci.textContent=result.pattern.icon;if(cn)cn.textContent=result.pattern.name;if(cd)cd.textContent=result.pattern.desc;
+  }else{cpEl.style.display='none';}
+}
+
+function updateIndicatorAgreement(result){
+  const agrDiv=document.getElementById('ind-agreement');
+  if(agrDiv&&result&&result.signals){
+    agrDiv.innerHTML=result.signals.map(s=>`<div class="ind-tag agree-${s.dir}">${s.dir==='bull'?'↑':s.dir==='bear'?'↓':'→'} ${s.name}</div>`).join('');
+  }
+}
+
+function updateWSStatusEl(text,color){
+  const el=document.getElementById('ws-status');
+  if(el){el.textContent=text;el.style.color=color;}
+}
+
+function updateAssetStrength(sym,score){
+  const el=document.getElementById('str-'+sym);if(!el)return;
+  el.className='strength '+(score>=70?'strong':score>=55?'medium':'weak');
+}
+
+// ── NEW: Instant Signal Flash on screen ──
+function flashSignalDirection(direction){
+  const flash=document.getElementById('instant-flash');
+  const pill=document.getElementById('flash-pill');
+  if(!flash||!pill)return;
+  const isCall=direction==='CALL';
+  pill.textContent=(isCall?'↑ CALL':'↓ PUT');
+  pill.className='flash-pill '+(isCall?'call':'put');
+  flash.classList.add('show');
+  setTimeout(()=>flash.classList.remove('show'),1500);
+}
+
+// ═══════════════════════════════════════════════════════
 // RENDER SIGNAL OUTPUT
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 function renderSignalOutput(result){
-  if(!result||!result.direction) return;
+  if(!result||!result.direction)return;
   const isCall=result.direction==='CALL';
   const wat=getWAT();
   const timeStr=wat.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' WAT';
@@ -1461,14 +1403,9 @@ function renderSignalOutput(result){
   const riskColor=result.risk==='LOW'?'var(--accent)':result.risk==='HIGH'?'var(--red)':'var(--gold)';
   const platformLabel=currentPlatform==='iq'?'IQ Option':'Pocket Option';
   const emoji=isCall?'🟢':'🔴';
-
-  // Build clean professional Telegram message
-  const indLine = result.signals
-    .filter(s=>s.dir===(isCall?'bull':'bear'))
-    .slice(0,5)
-    .map(s=>`✅ ${s.name}`)
-    .join('\n');
-  const dominantVotes = isCall ? result.bullVotes : result.bearVotes;
+  const dominantVotes=isCall?result.bullVotes:result.bearVotes;
+  const latTag = wsPingTime ? ` · ⚡${wsPingTime}ms` : '';
+  const indLine=result.signals.filter(s=>s.dir===(isCall?'bull':'bear')).slice(0,5).map(s=>`✅ ${s.name}`).join('\n');
 
   const tgMsg=`${emoji} *SIGNAL ALERT* ${emoji}
 ━━━━━━━━━━━━━━━━
@@ -1487,7 +1424,7 @@ ${indLine}
 ━━━━━━━━━━━━━━━━
 📌 Entry: ${result.analysis.split('.')[0]}.
 ━━━━━━━━━━━━━━━━
-🤖 *GhostFX Ultimate* | ${platformLabel}
+🤖 *GhostFX Ultimate v2*${latTag} | ${platformLabel}
 ⚠️ Trading involves risk. Trade responsibly.`;
 
   const output=document.getElementById('signal-output');
@@ -1495,7 +1432,7 @@ ${indLine}
   output.innerHTML=`
 <div class="signal-card">
   <div class="sig-header">
-    <div class="sig-header-title">⚡ CONFLUENCE SIGNAL · ${result.bullVotes}🟢 ${result.bearVotes}🔴</div>
+    <div class="sig-header-title">⚡ LIVE SIGNAL · ${result.bullVotes}🟢 ${result.bearVotes}🔴${latTag}</div>
     <div class="sig-time">${timeStr}</div>
   </div>
   <div class="sig-body">
@@ -1523,102 +1460,78 @@ ${indLine}
   </div>
 </div>`;
 
-  setTimeout(()=>{const b=document.getElementById('conf-bar');if(b)b.style.width=result.confidence+'%';},100);
   output.scrollIntoView({behavior:'smooth',block:'nearest'});
   window._tgMsg=tgMsg;
-
-  // Log signal
+  flashSignalDirection(result.direction);
   logSignal(result,currentOTC,currentExpiry,timeStr,dateStr);
   updateDailyStats();
 }
 
 function copyTG(){
-  if(!window._tgMsg) return;
+  if(!window._tgMsg)return;
   navigator.clipboard.writeText(window._tgMsg).then(()=>{
     const btn=document.querySelector('.btn-copy');
     if(btn){btn.textContent='✅ Copied!';setTimeout(()=>btn.textContent='📋 Copy',2000);}
   });
 }
-
-// ── One-tap Telegram Send ──
-const TG_TOKEN='8393564789:AAFRceME9Uv5JB8n1JrL1faHTXYeH1A0_ws';
-const TG_CHANNEL='-1003983786829';
-
 async function sendToTelegram(){
   if(!window._tgMsg){showTGStatus('⚠️ No signal yet!','error');return;}
   const btn=document.getElementById('btn-tg-send');
   if(btn){btn.disabled=true;btn.textContent='📤 Sending...';}
   try{
-    const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:TG_CHANNEL,text:window._tgMsg,parse_mode:'Markdown'})
-    });
+    const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:TG_CHANNEL,text:window._tgMsg,parse_mode:'Markdown'})});
     const d=await r.json();
-    if(d.ok){
-      showTGStatus('✅ Sent to Telegram channel!','success');
-      if(btn){btn.textContent='✅ Sent!';setTimeout(()=>{btn.disabled=false;btn.textContent='📤 Send to Telegram';},3000);}
-    } else {
-      showTGStatus('❌ '+d.description,'error');
-      if(btn){btn.disabled=false;btn.textContent='📤 Send to Telegram';}
-    }
-  }catch(e){
-    showTGStatus('❌ Must be on GitHub Pages','error');
-    if(btn){btn.disabled=false;btn.textContent='📤 Send to Telegram';}
-  }
+    if(d.ok){showTGStatus('✅ Sent to Telegram channel!','success');if(btn){btn.textContent='✅ Sent!';setTimeout(()=>{btn.disabled=false;btn.textContent='📤 Send to Telegram';},3000);}}
+    else{showTGStatus('❌ '+d.description,'error');if(btn){btn.disabled=false;btn.textContent='📤 Send to Telegram';}}
+  }catch(e){showTGStatus('❌ Must be on GitHub Pages','error');if(btn){btn.disabled=false;btn.textContent='📤 Send to Telegram';}}
 }
-
 function showTGStatus(msg,type){
   const ex=document.getElementById('tg-status');if(ex)ex.remove();
   const div=document.createElement('div');div.id='tg-status';
   const ok=type==='success';
   div.style.cssText=`margin-top:8px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;font-family:'Share Tech Mono',monospace;text-align:center;${ok?'background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:var(--accent);':'background:rgba(255,51,85,0.1);border:1px solid rgba(255,51,85,0.3);color:var(--red);'}`;
   div.textContent=msg;
-  const out=document.getElementById('signal-output');
-  if(out)out.appendChild(div);
+  const out=document.getElementById('signal-output');if(out)out.appendChild(div);
   setTimeout(()=>{const e=document.getElementById('tg-status');if(e)e.remove();},5000);
 }
 
-// ═══════════════════════════════
-// COUNTDOWN
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
+// COUNTDOWN (REST fallback only)
+// ═══════════════════════════════════════════════════════
 function startCountdown(){
-  if(autoTimer) clearInterval(autoTimer);
-  cdCount=60; // 1 minute — matches 1-min data freshness
+  if(autoTimer)clearInterval(autoTimer);
+  let cdCount=60;
+  const scanMode=document.getElementById('scan-mode-lbl');
+  if(scanMode) scanMode.textContent='REST POLL';
   autoTimer=setInterval(()=>{
     cdCount--;
     const s=String(cdCount).padStart(2,'0');
     const el=document.getElementById('auto-cd');
-    if(el) el.textContent='⏱ Next scan: 0:'+s;
-    if(cdCount<=0){clearInterval(autoTimer);fetchAllAndAnalyze();}
+    if(el)el.textContent='⏱ Next REST scan: 0:'+s;
+    if(cdCount<=0){
+      clearInterval(autoTimer);
+      if(!wsReady){prefillAllBuffers();}
+      else{clearInterval(autoTimer);autoTimer=null;const el=document.getElementById('auto-cd');if(el)el.textContent='⚡ WS Live — instant';}
+    }
   },1000);
 }
 
-// ═══════════════════════════════
-// STAKE CALCULATOR
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
+// STAKE / DAILY / PILLS
+// ═══════════════════════════════════════════════════════
 function calcStake(){
   const acc=parseFloat(document.getElementById('account-size').value)||100;
-  const stake=(acc*0.05).toFixed(2);
-  document.getElementById('stake-amount').textContent='$'+stake;
+  document.getElementById('stake-amount').textContent='$'+(acc*0.05).toFixed(2);
 }
-
-// ═══════════════════════════════
-// DAILY STATS
-// ═══════════════════════════════
 function updateDailyStats(){
   const today=new Date().toDateString();
-  if(dailyStats.date!==today){dailyStats={signals:0,wins:0,losses:0,profit:0,date:today};}
+  if(dailyStats.date!==today)dailyStats={signals:0,wins:0,losses:0,profit:0,date:today};
   document.getElementById('d-signals').textContent=dailyStats.signals;
   document.getElementById('d-wins').textContent=dailyStats.wins;
   document.getElementById('d-losses').textContent=dailyStats.losses;
   document.getElementById('d-profit').textContent='$'+dailyStats.profit.toFixed(0);
   try{localStorage.setItem('ghostfx_ult_daily',JSON.stringify(dailyStats));}catch(e){}
 }
-
-// ═══════════════════════════════
-// PILLS SETUP
-// ═══════════════════════════════
 function setupPills(){
   document.querySelectorAll('#expiry-pills .pill').forEach(p=>{
     p.addEventListener('click',()=>{
@@ -1628,159 +1541,86 @@ function setupPills(){
   });
 }
 
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 // TRACKER
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
 function saveLog(){try{localStorage.setItem('ghostfx_ult_log',JSON.stringify(signalLog));}catch(e){}}
-
 function logSignal(sig,asset,expiry,timeStr,dateStr){
   dailyStats.signals++;
-  saveLog();
   const entry={id:Date.now(),asset,direction:sig.direction,expiry,confidence:sig.confidence,strength:sig.strength,time:timeStr,date:dateStr,result:'pending',platform:currentPlatform};
-  signalLog.unshift(entry);
-  if(signalLog.length>300) signalLog=signalLog.slice(0,300);
-  saveLog();
+  signalLog.unshift(entry);if(signalLog.length>300)signalLog=signalLog.slice(0,300);saveLog();
 }
-
 function setResult(id,result){
   const e=signalLog.find(e=>e.id===id);
-  if(e){
-    const prev=e.result;e.result=result;
-    if(prev==='pending'){
-      if(result==='win'){dailyStats.wins++;dailyStats.profit+=18.6;}
-      else if(result==='loss'){dailyStats.losses++;dailyStats.profit-=10;}
-      updateDailyStats();
-    }
-    saveLog();renderTracker();
-  }
+  if(e){const prev=e.result;e.result=result;if(prev==='pending'){if(result==='win'){dailyStats.wins++;dailyStats.profit+=18.6;}else if(result==='loss'){dailyStats.losses++;dailyStats.profit-=10;}updateDailyStats();}saveLog();renderTracker();}
 }
-
 function deleteEntry(id){signalLog=signalLog.filter(e=>e.id!==id);saveLog();renderTracker();}
-
 let currentFilter='all';
-function filterLog(f,btn){
-  currentFilter=f;
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');renderTracker();
-}
+function filterLog(f,btn){currentFilter=f;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTracker();}
+function clearLog(){if(!confirm('Clear all history?'))return;signalLog=[];saveLog();renderTracker();}
 
 function renderTracker(){
-  const wins=signalLog.filter(e=>e.result==='win').length;
-  const losses=signalLog.filter(e=>e.result==='loss').length;
-  const completed=wins+losses;
-  const wr=completed>0?Math.round(wins/completed*100):0;
+  const wins=signalLog.filter(e=>e.result==='win').length,losses=signalLog.filter(e=>e.result==='loss').length;
+  const completed=wins+losses,wr=completed>0?Math.round(wins/completed*100):0;
   document.getElementById('t-total').textContent=signalLog.length;
   document.getElementById('t-wins').textContent=wins;
   document.getElementById('t-losses').textContent=losses;
   document.getElementById('t-wr').textContent=wr+'%';
   setTimeout(()=>{
     const wb=document.getElementById('wr-win'),lb=document.getElementById('wr-loss');
-    if(wb) wb.style.width=(completed>0?wins/completed*100:0)+'%';
-    if(lb) lb.style.width=(completed>0?losses/completed*100:0)+'%';
+    if(wb)wb.style.width=(completed>0?wins/completed*100:0)+'%';
+    if(lb)lb.style.width=(completed>0?losses/completed*100:0)+'%';
   },100);
-
   updateTrackerRecommendations();
-  // Performance by pair
   const pairStats={};
-  signalLog.filter(e=>e.result!=='pending').forEach(e=>{
-    if(!pairStats[e.asset]) pairStats[e.asset]={wins:0,losses:0};
-    if(e.result==='win') pairStats[e.asset].wins++;
-    else pairStats[e.asset].losses++;
-  });
+  signalLog.filter(e=>e.result!=='pending').forEach(e=>{if(!pairStats[e.asset])pairStats[e.asset]={wins:0,losses:0};if(e.result==='win')pairStats[e.asset].wins++;else pairStats[e.asset].losses++;});
   const perfEl=document.getElementById('perf-analytics');
   const pairs=Object.entries(pairStats).sort((a,b)=>(b[1].wins/(b[1].wins+b[1].losses))-(a[1].wins/(a[1].wins+a[1].losses)));
   if(pairs.length===0){perfEl.innerHTML='<div class="empty-state"><div>📊</div>No data yet</div>';}
-  else{
-    perfEl.innerHTML=pairs.map(([pair,s])=>{
-      const t=s.wins+s.losses;const wr=Math.round(s.wins/t*100);
-      return `<div class="perf-row"><div class="perf-pair">${pair}</div><div class="perf-stats"><span style="color:var(--accent)">${s.wins}W</span><span style="color:var(--red)">${s.losses}L</span><span style="color:var(--gold)">${wr}%</span></div></div>`;
-    }).join('');
-  }
-
-  // Best hours
+  else{perfEl.innerHTML=pairs.map(([pair,s])=>{const t=s.wins+s.losses,wr=Math.round(s.wins/t*100);return `<div class="perf-row"><div class="perf-pair">${pair}</div><div class="perf-stats"><span style="color:var(--accent)">${s.wins}W</span><span style="color:var(--red)">${s.losses}L</span><span style="color:var(--gold)">${wr}%</span></div></div>`;}).join('');}
   const hourStats={};
-  signalLog.filter(e=>e.result!=='pending').forEach(e=>{
-    const h=parseInt(e.time?.split(':')[0]||0);
-    if(!hourStats[h]) hourStats[h]={wins:0,losses:0};
-    if(e.result==='win') hourStats[h].wins++;
-    else hourStats[h].losses++;
-  });
+  signalLog.filter(e=>e.result!=='pending').forEach(e=>{const h=parseInt(e.time?.split(':')[0]||0);if(!hourStats[h])hourStats[h]={wins:0,losses:0};if(e.result==='win')hourStats[h].wins++;else hourStats[h].losses++;});
   const hoursEl=document.getElementById('best-hours');
   const hours=Object.entries(hourStats).sort((a,b)=>(b[1].wins/(b[1].wins+b[1].losses))-(a[1].wins/(a[1].wins+a[1].losses))).slice(0,5);
   if(hours.length===0){hoursEl.innerHTML='<div class="empty-state"><div>🕐</div>No data yet</div>';}
-  else{
-    hoursEl.innerHTML=hours.map(([h,s])=>{
-      const t=s.wins+s.losses;const wr=Math.round(s.wins/t*100);
-      return `<div class="perf-row"><div class="perf-pair">${h}:00 - ${parseInt(h)+1}:00 WAT</div><div class="perf-stats"><span style="color:var(--accent)">${s.wins}W</span><span style="color:var(--red)">${s.losses}L</span><span style="color:var(--gold)">${wr}%</span></div></div>`;
-    }).join('');
-  }
-
-  // Log list
+  else{hoursEl.innerHTML=hours.map(([h,s])=>{const t=s.wins+s.losses,wr=Math.round(s.wins/t*100);return `<div class="perf-row"><div class="perf-pair">${h}:00 - ${parseInt(h)+1}:00 WAT</div><div class="perf-stats"><span style="color:var(--accent)">${s.wins}W</span><span style="color:var(--red)">${s.losses}L</span><span style="color:var(--gold)">${wr}%</span></div></div>`;}).join('');}
   const list=document.getElementById('log-list');
   const filtered=currentFilter==='all'?signalLog:signalLog.filter(e=>e.result===currentFilter);
   if(filtered.length===0){list.innerHTML='<div class="empty-state"><div>📋</div>No signals yet.</div>';return;}
   list.innerHTML=filtered.map(e=>`
     <div class="log-entry" id="entry-${e.id}">
       <div class="log-dir ${e.direction.toLowerCase()}">${e.direction==='CALL'?'↑':'↓'}<br>${e.direction}</div>
-      <div class="log-info">
-        <div class="log-asset">${e.asset}</div>
-        <div class="log-meta">${e.expiry} · ${e.confidence}% · ${e.strength||''}</div>
-        <div class="log-stamp">📅 ${e.date} · 🕐 ${e.time}</div>
-      </div>
-      ${e.result==='pending'
-        ?`<button class="log-res pending" onclick="showPicker(${e.id})">⏳ PENDING</button>`
-        :`<button class="log-res ${e.result}" onclick="showPicker(${e.id})">${e.result==='win'?'✅ WIN':'❌ LOSS'}</button>`
-      }
+      <div class="log-info"><div class="log-asset">${e.asset}</div><div class="log-meta">${e.expiry} · ${e.confidence}% · ${e.strength||''}</div><div class="log-stamp">📅 ${e.date} · 🕐 ${e.time}</div></div>
+      ${e.result==='pending'?`<button class="log-res pending" onclick="showPicker(${e.id})">⏳ PENDING</button>`:`<button class="log-res ${e.result}" onclick="showPicker(${e.id})">${e.result==='win'?'✅ WIN':'❌ LOSS'}</button>`}
       <button class="log-del" onclick="deleteEntry(${e.id})">🗑</button>
-    </div>
-  `).join('');
-}
-
-// Show tracker-based recommendations on signals page
-function updateTrackerRecommendations(){
-  const pairStats={};
-  signalLog.filter(e=>e.result!=='pending').forEach(e=>{
-    if(!pairStats[e.asset]) pairStats[e.asset]={wins:0,losses:0};
-    if(e.result==='win') pairStats[e.asset].wins++;
-    else pairStats[e.asset].losses++;
-  });
-  const pairs=Object.entries(pairStats)
-    .filter(([,s])=>s.wins+s.losses>=3)
-    .map(([pair,s])=>({pair,wr:Math.round(s.wins/(s.wins+s.losses)*100),total:s.wins+s.losses}))
-    .sort((a,b)=>b.wr-a.wr)
-    .slice(0,3);
-  
-  const recDiv=document.getElementById('tracker-rec');
-  if(recDiv&&pairs.length>0){
-    recDiv.style.display='block';
-    recDiv.innerHTML='📊 YOUR BEST PAIRS: '+pairs.map(p=>`<strong style="color:#fff">${p.pair.replace(' OTC','')}</strong> ${p.wr}%`).join(' · ');
-  }
+    </div>`).join('');
 }
 
 function showPicker(id){
   document.querySelectorAll('.result-picker').forEach(p=>p.remove());
-  const entry=document.getElementById('entry-'+id);
-  if(!entry) return;
+  const entry=document.getElementById('entry-'+id);if(!entry)return;
   const p=document.createElement('div');p.className='result-picker';
   p.style.cssText='display:flex;gap:7px;padding:9px 12px;background:rgba(255,255,255,0.03);border-top:1px solid var(--border);border-radius:0 0 10px 10px;justify-content:center;';
-  p.innerHTML=`
-    <button onclick="setResult(${id},'win');document.querySelectorAll('.result-picker').forEach(p=>p.remove())" style="flex:1;padding:8px;border-radius:8px;background:rgba(0,255,136,0.1);border:1px solid var(--accent);color:var(--accent);font-weight:700;cursor:pointer;font-size:13px;">✅ WIN</button>
-    <button onclick="setResult(${id},'loss');document.querySelectorAll('.result-picker').forEach(p=>p.remove())" style="flex:1;padding:8px;border-radius:8px;background:rgba(255,51,85,0.08);border:1px solid var(--red);color:var(--red);font-weight:700;cursor:pointer;font-size:13px;">❌ LOSS</button>
-    <button onclick="document.querySelectorAll('.result-picker').forEach(p=>p.remove())" style="padding:8px 12px;border-radius:8px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:13px;">✕</button>
-  `;
+  p.innerHTML=`<button onclick="setResult(${id},'win');document.querySelectorAll('.result-picker').forEach(p=>p.remove())" style="flex:1;padding:8px;border-radius:8px;background:rgba(0,255,136,0.1);border:1px solid var(--accent);color:var(--accent);font-weight:700;cursor:pointer;font-size:13px;">✅ WIN</button><button onclick="setResult(${id},'loss');document.querySelectorAll('.result-picker').forEach(p=>p.remove())" style="flex:1;padding:8px;border-radius:8px;background:rgba(255,51,85,0.08);border:1px solid var(--red);color:var(--red);font-weight:700;cursor:pointer;font-size:13px;">❌ LOSS</button><button onclick="document.querySelectorAll('.result-picker').forEach(p=>p.remove())" style="padding:8px 12px;border-radius:8px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:13px;">✕</button>`;
   entry.insertAdjacentElement('afterend',p);
 }
 
-function clearLog(){if(!confirm('Clear all history?')) return;signalLog=[];saveLog();renderTracker();}
+function updateTrackerRecommendations(){
+  const pairStats={};
+  signalLog.filter(e=>e.result!=='pending').forEach(e=>{if(!pairStats[e.asset])pairStats[e.asset]={wins:0,losses:0};if(e.result==='win')pairStats[e.asset].wins++;else pairStats[e.asset].losses++;});
+  const pairs=Object.entries(pairStats).filter(([,s])=>s.wins+s.losses>=3).map(([pair,s])=>({pair,wr:Math.round(s.wins/(s.wins+s.losses)*100),total:s.wins+s.losses})).sort((a,b)=>b.wr-a.wr).slice(0,3);
+  const recDiv=document.getElementById('tracker-rec');
+  if(recDiv&&pairs.length>0){recDiv.style.display='block';recDiv.innerHTML='📊 YOUR BEST PAIRS: '+pairs.map(p=>`<strong style="color:#fff">${p.pair.replace(' OTC','')}</strong> ${p.wr}%`).join(' · ');}
+}
 
-// ═══════════════════════════════
-// iOS / Android Install
-// ═══════════════════════════════
+// ═══════════════════════════════════════════════════════
+// PWA / INSTALL
+// ═══════════════════════════════════════════════════════
 const isIOS=/iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
 if(isIOS&&!window.navigator.standalone){
   const ib=document.createElement('div');
   ib.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#060e1c,#0c1e38);border:1px solid #00ff88;border-radius:14px;padding:13px 16px;z-index:9999;width:90%;max-width:380px;font-family:sans-serif;text-align:center;';
-  ib.innerHTML='<div style="color:#00ff88;font-weight:700;font-size:13px;margin-bottom:5px">📲 Install GhostFX Ultimate</div><div style="color:#b8d4f0;font-size:12px;line-height:1.7">Tap <strong>Share ⎙</strong> → <strong>"Add to Home Screen"</strong></div><button onclick="this.parentElement.remove()" style="margin-top:9px;background:none;border:1px solid #243a54;border-radius:6px;color:#243a54;padding:4px 14px;cursor:pointer;font-size:11px;">Got it</button>';
+  ib.innerHTML='<div style="color:#00ff88;font-weight:700;font-size:13px;margin-bottom:5px">📲 Install GhostFX Ultimate v2</div><div style="color:#b8d4f0;font-size:12px;line-height:1.7">Tap <strong>Share ⎙</strong> → <strong>"Add to Home Screen"</strong></div><button onclick="this.parentElement.remove()" style="margin-top:9px;background:none;border:1px solid #243a54;border-radius:6px;color:#243a54;padding:4px 14px;cursor:pointer;font-size:11px;">Got it</button>';
   document.body.appendChild(ib);
 }
 let dp;
@@ -1788,14 +1628,20 @@ window.addEventListener('beforeinstallprompt',(e)=>{
   e.preventDefault();dp=e;
   const btn=document.createElement('button');
   btn.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#005500,#00aa44);border:none;border-radius:11px;color:#fff;font-weight:700;font-size:13px;padding:12px 22px;cursor:pointer;z-index:9999;box-shadow:0 4px 18px rgba(0,170,68,0.35);';
-  btn.textContent='📲 Install GhostFX Ultimate';
+  btn.textContent='📲 Install GhostFX Ultimate v2';
   btn.onclick=async()=>{dp.prompt();btn.remove();};
   document.body.appendChild(btn);
 });
 
-// ═══════════════════════════════
+// ── Periodic tick bar refresh ──
+setInterval(()=>{
+  updateTickBar();
+  updateTickBuf();
+  if(wsReady){const el=document.getElementById('auto-cd');if(el)el.textContent='⚡ WS Live — real-time';const sm=document.getElementById('scan-mode-lbl');if(sm)sm.textContent='WS LIVE';}
+  updateBestPair();
+}, 2000);
+
 // START
-// ═══════════════════════════════
 checkSession();
 </script>
 </body>
